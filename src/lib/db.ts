@@ -1,4 +1,4 @@
-import { put, head } from '@vercel/blob';
+import { put, get } from '@vercel/blob';
 
 // The interface structure for your website's quotes
 export interface Quote {
@@ -12,22 +12,26 @@ const BLOB_FILENAME = 'quotes.json';
 // Fetch the quotes array directly from Vercel Blob, bypassing stale metadata and CDN caches
 async function getCloudQuotes(): Promise<Quote[]> {
   try {
-    const fileHead = await head(BLOB_FILENAME);
-    const url = fileHead.url.includes('?')
-      ? `${fileHead.url}&t=${Date.now()}`
-      : `${fileHead.url}?t=${Date.now()}`;
+    const blob = await get(BLOB_FILENAME, {
+      access: 'private',
+      useCache: false,
+    });
 
-    const response = await fetch(url, {
-      cache: 'no-store',
+    if (!blob || blob.stream === null) {
+      return [];
+    }
+
+    const response = new Response(blob.stream, {
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Cache-Control': 'no-store',
         Pragma: 'no-cache',
         Expires: '0',
       },
     });
 
     return await response.json();
-  } catch {
+  } catch (error) {
+    console.error("getCloudQuotes failed:", error);
     return [];
   }
 }

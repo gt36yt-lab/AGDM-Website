@@ -7,7 +7,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 type Quote = {
   id: number;
   text: string;
-  scheduled_date: string;
+  scheduledDate: string;
 };
 
 export default function AdminDashboard() {
@@ -163,7 +163,7 @@ export default function AdminDashboard() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-medium text-[var(--accent-soft)]">
-                    {q.scheduled_date}
+                    {q.scheduledDate}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-[var(--text)]">
                     {q.text}
