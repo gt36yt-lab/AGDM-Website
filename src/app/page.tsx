@@ -7,11 +7,11 @@ import { getLatestQuoteOnOrBefore, getQuoteForDate } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
   const tz = getQuoteTimezone();
   const today = todayInTimezone(tz);
-  const exact = getQuoteForDate(today);
-  const quote = exact ?? getLatestQuoteOnOrBefore(today);
+  const exact = await getQuoteForDate(today);
+  const quote = exact ?? await getLatestQuoteOnOrBefore(today);
   const displayDate = formatDisplayDate(today, tz);
 
   return (
