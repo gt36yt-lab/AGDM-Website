@@ -1,87 +1,69 @@
-import path from "path";
-import fs from "fs";
+import { put, head } from '@vercel/blob';
 
-export type Quote = {
+// The interface structure for your website's quotes
+interface Quote {
   id: number;
   text: string;
-  scheduled_date: string;
-  created_at: string;
-};
+  scheduledDate: string;
+}
 
-type Store = {
-  nextId: number;
-  quotes: Quote[];
-};
+const BLOB_FILENAME = 'quotes.json';
 
-const storePath = path.join(process.cwd(), "data", "quotes.json");
-
-function ensureDataDir(): void {
-  const dir = path.dirname(storePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// Helper function to pull the latest quotes array from the cloud
+async function getCloudQuotes(): Promise<Quote[]> {
+  try {
+    // Check if the file already exists in your cloud bucket
+    const fileHead = await head(BLOB_FILENAME);
+    const response = await fetch(fileHead.url, { cache: 'no-store' });
+    return await response.json();
+  } catch {
+    // If the file doesn't exist yet in the cloud, start with an empty list
+    return [];
   }
 }
 
-function readStore(): Store {
-  ensureDataDir();
-  if (!fs.existsSync(storePath)) {
-    return { nextId: 1, quotes: [] };
-  }
-  const raw = fs.readFileSync(storePath, "utf-8");
-  return JSON.parse(raw) as Store;
+// Helper function to save the quotes array back up to the cloud
+async function saveCloudQuotes(quotes: Quote[]): Promise<void> {
+  const jsonString = JSON.stringify(quotes, null, 2);
+  await put(BLOB_FILENAME, jsonString, {
+    access: 'public',
+    addRandomSuffix: false, // Keeps the filename exactly 'quotes.json'
+  });
 }
 
-function writeStore(store: Store): void {
-  ensureDataDir();
-  fs.writeFileSync(storePath, JSON.stringify(store, null, 2), "utf-8");
+// 1. Fetch all quotes asynchronously (We wrap it in a function wrapper)
+export async function listQuotes(): Promise<Quote[]> {
+  return await getCloudQuotes();
 }
 
-export function getQuoteForDate(date: string): Quote | undefined {
-  return readStore().quotes.find((q) => q.scheduled_date === date);
-}
+// 2. Create and push a new quote to cloud storage
+export async function createQuote(text: string, scheduledDate: string): Promise<Quote> {
+  const quotes = await getCloudQuotes();
 
-export function getLatestQuoteOnOrBefore(date: string): Quote | undefined {
-  return readStore()
-    .quotes.filter((q) => q.scheduled_date <= date)
-    .sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date))[0];
-}
-
-export function listQuotes(): Quote[] {
-  return readStore().quotes.sort((a, b) =>
-    b.scheduled_date.localeCompare(a.scheduled_date),
-  );
-}
-
-export function createQuote(text: string, scheduledDate: string): Quote {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    throw new Error("Quote text is required.");
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
-    throw new Error("Invalid date format.");
-  }
-
-  const store = readStore();
-  if (store.quotes.some((q) => q.scheduled_date === scheduledDate)) {
+  // Check for duplicate date constraints
+  const duplicate = quotes.find(q => q.scheduledDate === scheduledDate);
+  if (duplicate) {
     throw new Error("DUPLICATE_DATE");
   }
 
-  const quote: Quote = {
-    id: store.nextId++,
-    text: trimmed,
-    scheduled_date: scheduledDate,
-    created_at: new Date().toISOString(),
-  };
-  store.quotes.push(quote);
-  writeStore(store);
-  return quote;
+  // Auto-increment the id
+  const nextId = quotes.length > 0 ? Math.max(...quotes.map(q => q.id)) + 1 : 1;
+
+  const newQuote: Quote = { id: nextId, text, scheduledDate };
+  quotes.push(newQuote);
+
+  await saveCloudQuotes(quotes);
+  return newQuote;
 }
 
-export function deleteQuote(id: number): boolean {
-  const store = readStore();
-  const before = store.quotes.length;
-  store.quotes = store.quotes.filter((q) => q.id !== id);
-  if (store.quotes.length === before) return false;
-  writeStore(store);
+// 3. Delete a quote from cloud storage by its ID
+export async function deleteQuote(id: number): Promise<boolean> {
+  const quotes = await getCloudQuotes();
+  const index = quotes.findIndex(q => q.id === id);
+
+  if (index === -1) return false;
+
+  quotes.splice(index, 1);
+  await saveCloudQuotes(quotes);
   return true;
 }

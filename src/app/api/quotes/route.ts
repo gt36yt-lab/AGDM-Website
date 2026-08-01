@@ -6,7 +6,9 @@ export async function GET(request: NextRequest) {
   const denied = await requireAdmin(request.headers.get("cookie"));
   if (denied) return denied;
 
-  return Response.json({ quotes: listQuotes() });
+  // Added await here for cloud retrieval
+  const quotesList = await listQuotes();
+  return Response.json({ quotes: quotesList });
 }
 
 export async function POST(request: NextRequest) {
@@ -21,7 +23,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const quote = createQuote(body.text ?? "", body.scheduledDate ?? "");
+    // Added await here for cloud file writing
+    const quote = await createQuote(body.text ?? "", body.scheduledDate ?? "");
     return Response.json({ quote }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not save quote";
@@ -44,7 +47,9 @@ export async function DELETE(request: NextRequest) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  if (!deleteQuote(id)) {
+  // Added await here for cloud editing
+  const deleted = await deleteQuote(id);
+  if (!deleted) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 
