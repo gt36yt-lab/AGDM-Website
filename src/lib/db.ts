@@ -9,11 +9,20 @@ export interface Quote {
 
 const BLOB_FILENAME = 'quotes.json';
 
-// Helper function to pull the latest quotes array from the cloud
+// Paste the updated function here to completely bypass Vercel and browser caches
 async function getCloudQuotes(): Promise<Quote[]> {
   try {
     const fileHead = await head(BLOB_FILENAME);
-    const response = await fetch(fileHead.url, { cache: 'no-store' });
+    
+    // Explicitly force fetch to pull fresh data on every request
+    const response = await fetch(fileHead.url, { 
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
     return await response.json();
   } catch {
     return [];
@@ -24,8 +33,8 @@ async function getCloudQuotes(): Promise<Quote[]> {
 async function saveCloudQuotes(quotes: Quote[]): Promise<void> {
   const jsonString = JSON.stringify(quotes, null, 2);
   await put(BLOB_FILENAME, jsonString, {
-    access: 'private',
-    allowOverwrite: true,
+    access: 'private', 
+    allowOverwrite: true, // Allows rewriting the file
     addRandomSuffix: false, 
   });
 }
@@ -82,5 +91,5 @@ export async function getLatestQuoteOnOrBefore(dateStr: string): Promise<Quote |
   
   // Sort them so the closest date to today comes first
   pastQuotes.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
-  return pastQuotes[0];
+  return pastQuotes[0]; // Returns the single closest quote object
 }
