@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --bg-deep: #0f0a1a;
+  --bg-glow: #2d1b4e;
+  --accent: #e8a838;
+  --accent-soft: #f5d08a;
+  --text: #f8f4ef;
+  --text-muted: #b8b0a8;
+}
+
+body {
+  background: radial-gradient(
+      ellipse 120% 80% at 50% -20%,
+      var(--bg-glow) 0%,
+      transparent 55%
+    ),
+    var(--bg-deep);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+.quote-mark {
+  font-family: var(--font-serif), Georgia, serif;
+  color: var(--accent);
+  opacity: 0.35;
+}
