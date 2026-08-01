@@ -9,12 +9,14 @@ export interface Quote {
 
 const BLOB_FILENAME = 'quotes.json';
 
-// Paste the updated function here to completely bypass Vercel and browser caches
+// Fetch the quotes array directly from Vercel Blob, completely bypassing caches
 async function getCloudQuotes(): Promise<Quote[]> {
   try {
-    const fileHead = await head(BLOB_FILENAME);
+    // FIXED: Appending a timestamp (?t=...) forces Vercel to bypass its internal metadata cache completely!
+    const cacheBusterName = `${BLOB_FILENAME}?t=${Date.now()}`;
+    const fileHead = await head(cacheBusterName);
     
-    // Explicitly force fetch to pull fresh data on every request
+    // Explicitly force fetch to pull raw fresh data on every request
     const response = await fetch(fileHead.url, { 
       cache: 'no-store',
       headers: {
@@ -25,16 +27,17 @@ async function getCloudQuotes(): Promise<Quote[]> {
     });
     return await response.json();
   } catch {
+    // If the file does not exist in your cloud bucket yet, start with a clean array
     return [];
   }
 }
 
-// Helper function to save the quotes array back up to the cloud
+// Save the quotes array back up to the cloud securely
 async function saveCloudQuotes(quotes: Quote[]): Promise<void> {
   const jsonString = JSON.stringify(quotes, null, 2);
   await put(BLOB_FILENAME, jsonString, {
     access: 'private', 
-    allowOverwrite: true, // Allows rewriting the file
+    allowOverwrite: true, // Allows rewriting the file contents on updates
     addRandomSuffix: false, 
   });
 }
