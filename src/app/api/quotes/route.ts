@@ -2,13 +2,22 @@ import type { NextRequest } from "next/server";
 import { createQuote, deleteQuote, listQuotes } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   const denied = await requireAdmin(request.headers.get("cookie"));
   if (denied) return denied;
 
-  // Added await here for cloud retrieval
   const quotesList = await listQuotes();
-  return Response.json({ quotes: quotesList });
+  return Response.json(
+    { quotes: quotesList },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -23,7 +32,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Added await here for cloud file writing
     const quote = await createQuote(body.text ?? "", body.scheduledDate ?? "");
     return Response.json({ quote }, { status: 201 });
   } catch (err) {
@@ -47,7 +55,6 @@ export async function DELETE(request: NextRequest) {
     return Response.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  // Added await here for cloud editing
   const deleted = await deleteQuote(id);
   if (!deleted) {
     return Response.json({ error: "Not found" }, { status: 404 });

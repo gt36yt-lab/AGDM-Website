@@ -9,25 +9,25 @@ export interface Quote {
 
 const BLOB_FILENAME = 'quotes.json';
 
-// Fetch the quotes array directly from Vercel Blob, completely bypassing caches
+// Fetch the quotes array directly from Vercel Blob, bypassing stale metadata and CDN caches
 async function getCloudQuotes(): Promise<Quote[]> {
   try {
-    // FIXED: Appending a timestamp (?t=...) forces Vercel to bypass its internal metadata cache completely!
-    const cacheBusterName = `${BLOB_FILENAME}?t=${Date.now()}`;
-    const fileHead = await head(cacheBusterName);
-    
-    // Explicitly force fetch to pull raw fresh data on every request
-    const response = await fetch(fileHead.url, { 
+    const fileHead = await head(BLOB_FILENAME);
+    const url = fileHead.url.includes('?')
+      ? `${fileHead.url}&t=${Date.now()}`
+      : `${fileHead.url}?t=${Date.now()}`;
+
+    const response = await fetch(url, {
       cache: 'no-store',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
+        Pragma: 'no-cache',
+        Expires: '0',
+      },
     });
+
     return await response.json();
   } catch {
-    // If the file does not exist in your cloud bucket yet, start with a clean array
     return [];
   }
 }

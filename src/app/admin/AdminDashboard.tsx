@@ -20,7 +20,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
-    const res = await fetch("/api/quotes");
+    const res = await fetch("/api/quotes", { cache: "no-store" });
     if (res.status === 401) {
       router.push("/admin/login");
       return;
@@ -41,6 +41,7 @@ export default function AdminDashboard() {
 
     const res = await fetch("/api/quotes", {
       method: "POST",
+      cache: "no-store",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, scheduledDate }),
     });
@@ -61,7 +62,10 @@ export default function AdminDashboard() {
   async function onDelete(id: number) {
     if (!confirm("Remove this scheduled quote?")) return;
 
-    const res = await fetch(`/api/quotes?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/quotes?id=${id}`, {
+      method: "DELETE",
+      cache: "no-store",
+    });
     if (!res.ok) {
       setError("Could not delete.");
       return;
