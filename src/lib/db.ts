@@ -25,6 +25,7 @@ async function saveCloudQuotes(quotes: Quote[]): Promise<void> {
   const jsonString = JSON.stringify(quotes, null, 2);
   await put(BLOB_FILENAME, jsonString, {
     access: 'private',
+    allowOverwrite: true,
     addRandomSuffix: false, 
   });
 }
