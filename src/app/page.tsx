@@ -9,6 +9,7 @@ import {
 import { getLatestQuoteOnOrBefore, getQuoteForDate } from "@/lib/db";
 import { getUserSession } from "@/lib/auth";
 import CommentBox from "@/app/components/CommentBox";
+import PrivateChat from "@/app/components/PrivateChat";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -84,7 +85,10 @@ export default async function HomePage() {
       )}
 
       {quote && (
-        <CommentBox quoteId={quote.id} isSignedIn={Boolean(session)} />
+        <>
+          <CommentBox quoteId={quote.id} isSignedIn={Boolean(session)} />
+          <PrivateChat isAdmin={false} />
+        </>
       )}
 
       <footer className="mt-20 text-xs text-[var(--text-muted)] opacity-60">

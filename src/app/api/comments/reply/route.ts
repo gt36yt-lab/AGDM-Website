@@ -8,13 +8,14 @@ export const revalidate = 0;
 export async function POST(request: NextRequest) {
   const cookie = request.headers.get("cookie");
   const session = await getUserSession(cookie);
-  const denied = await requireAdmin(cookie);
+  const adminCheck = await requireAdmin(cookie);
+  const isAdmin = !adminCheck;
 
-  if (!session && denied) {
+  if (!session && !isAdmin) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { commentId?: number; message?: string };
+  let body: { commentId?: number; parentReplyId?: number; message?: string };
   try {
     body = await request.json();
   } catch {
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const commentId = Number(body.commentId);
+  const parentReplyId = Number(body.parentReplyId);
   const message = (body.message ?? "").trim();
 
   if (!Number.isInteger(commentId) || commentId < 1) {
@@ -32,6 +34,16 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Please write a reply." }, { status: 400 });
   }
 
-  const reply = await createReply(commentId, message);
+  if (!isAdmin && (!Number.isInteger(parentReplyId) || parentReplyId < 1)) {
+    return Response.json({ error: "Invalid reply target" }, { status: 400 });
+  }
+
+  const reply = await createReply(
+    commentId,
+    message,
+    isAdmin ? "ag" : "user",
+    isAdmin ? undefined : parentReplyId,
+  );
+
   return Response.json({ reply });
 }

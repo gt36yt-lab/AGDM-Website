@@ -35,10 +35,10 @@ export default function AdminLoginPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
       <h1 className="mb-2 font-[family-name:var(--font-serif)] text-3xl text-[var(--accent-soft)]">
-        Admin
+        AG
       </h1>
       <p className="mb-8 text-sm text-[var(--text-muted)]">
-        Schedule daily motivation for your visitors.
+        Welcome to AG&apos;s private space.
       </p>
 
       <form onSubmit={onSubmit} className="space-y-4">
