@@ -1,4 +1,10 @@
-const COOKIE_NAME = "ag_admin_session";
+const ADMIN_COOKIE_NAME = "ag_admin_session";
+const USER_COOKIE_NAME = "ag_user_session";
+
+export interface UserSession {
+  id: number;
+  username: string;
+}
 
 function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -63,6 +69,18 @@ async function verify(token: string): Promise<boolean> {
   );
 }
 
+function getCookieValue(cookieHeader: string | null, cookieName: string): string | null {
+  if (!cookieHeader) return null;
+
+  const match = cookieHeader
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${cookieName}=`));
+
+  if (!match) return null;
+  return match.slice(cookieName.length + 1);
+}
+
 export function verifyAdminPassword(password: string): boolean {
   const expected = getAdminPassword();
   if (password.length !== expected.length) return false;
@@ -77,22 +95,15 @@ export async function createSessionCookie(): Promise<string> {
   const expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
   const payload = toBase64Url(new TextEncoder().encode(`admin:${expires}`));
   const token = await sign(payload);
-  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`;
+  return `${ADMIN_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}`;
 }
 
 export async function isAdminSession(
   cookieHeader: string | null,
 ): Promise<boolean> {
-  if (!cookieHeader) return false;
+  const token = getCookieValue(cookieHeader, ADMIN_COOKIE_NAME);
+  if (!token) return false;
 
-  const match = cookieHeader
-    .split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${COOKIE_NAME}=`));
-
-  if (!match) return false;
-
-  const token = match.slice(COOKIE_NAME.length + 1);
   if (!(await verify(token))) return false;
 
   const dot = token.lastIndexOf(".");
@@ -111,7 +122,50 @@ export async function isAdminSession(
 }
 
 export function clearSessionCookie(): string {
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  return `${ADMIN_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+export async function createUserSessionCookie(
+  userId: number,
+  username: string,
+): Promise<string> {
+  const expires = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const payload = toBase64Url(
+    new TextEncoder().encode(`user:${userId}:${username}:${expires}`),
+  );
+  const token = await sign(payload);
+  return `${USER_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 60 * 60}`;
+}
+
+export async function getUserSession(
+  cookieHeader: string | null,
+): Promise<UserSession | null> {
+  const token = getCookieValue(cookieHeader, USER_COOKIE_NAME);
+  if (!token) return null;
+  if (!(await verify(token))) return null;
+
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return null;
+
+  try {
+    const payload = new TextDecoder().decode(
+      fromBase64Url(token.slice(0, dot)),
+    );
+    const [, userIdStr, username, expiresStr] = payload.split(":");
+    const expires = Number(expiresStr);
+    if (!Number.isFinite(expires) || Date.now() >= expires) return null;
+
+    return {
+      id: Number(userIdStr),
+      username,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearUserSessionCookie(): string {
+  return `${USER_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
 export async function requireAdmin(
