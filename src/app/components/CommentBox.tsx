@@ -62,6 +62,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
   const [loading, setLoading] = useState(false);
   const [userOptions, setUserOptions] = useState<UserOption[]>([]);
   const [mentionContext, setMentionContext] = useState<{ query: string; start: number | null }>({ query: "", start: null });
+  const [mentionSelection, setMentionSelection] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadComments = useCallback(async () => {
@@ -150,6 +151,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
 
   function updateMentionContext(value: string, cursor: number) {
     setMentionContext(getMentionContext(value, cursor));
+    setMentionSelection(0);
   }
 
   function insertMention(username: string) {
@@ -193,6 +195,10 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     .filter((user) => user.username.toLowerCase().includes(mentionContext.query.toLowerCase()))
     .slice(0, 6);
 
+  useEffect(() => {
+    setMentionSelection(0);
+  }, [mentionContext.query]);
+
   const chatMessages = comments
     .flatMap((comment) => {
       const rows: ChatMessage[] = [
@@ -233,13 +239,41 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
                 setMessage(nextValue);
                 updateMentionContext(nextValue, e.target.selectionStart);
               }}
-              onKeyUp={(e) => {
-                if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+              onKeyDown={(e) => {
+                const value = e.currentTarget.value;
+                const cursor = e.currentTarget.selectionStart ?? value.length;
+                updateMentionContext(value, cursor);
+
+                if (!mentionContext.start || mentionSuggestions.length === 0) return;
+
+                if (e.key === "ArrowDown") {
                   e.preventDefault();
+                  setMentionSelection((current) => (current + 1) % mentionSuggestions.length);
                 }
-                updateMentionContext(message, textareaRef.current?.selectionStart ?? message.length);
+
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMentionSelection((current) => (current - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+                }
+
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const selectedUser = mentionSuggestions[mentionSelection];
+                  if (selectedUser) {
+                    insertMention(selectedUser.username);
+                  }
+                }
               }}
-              onClick={() => updateMentionContext(message, textareaRef.current?.selectionStart ?? message.length)}
+              onKeyUp={(e) => {
+                const value = e.currentTarget.value;
+                const cursor = e.currentTarget.selectionStart ?? value.length;
+                updateMentionContext(value, cursor);
+              }}
+              onClick={() => {
+                const value = textareaRef.current?.value ?? message;
+                const cursor = textareaRef.current?.selectionStart ?? value.length;
+                updateMentionContext(value, cursor);
+              }}
               rows={4}
               placeholder="Write a message or mention someone with @username"
               className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"

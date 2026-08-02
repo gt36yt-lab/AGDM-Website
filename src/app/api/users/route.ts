@@ -1,4 +1,4 @@
-import { isAdminSession } from "@/lib/auth";
+import { getUserSession, isAdminSession } from "@/lib/auth";
 import { listUsers } from "@/lib/db";
 import { NextRequest } from "next/server";
 
@@ -8,8 +8,9 @@ export const revalidate = 0;
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get("cookie");
   const isAdmin = await isAdminSession(cookie);
+  const session = await getUserSession(cookie);
 
-  if (!isAdmin) {
+  if (!isAdmin && !session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
