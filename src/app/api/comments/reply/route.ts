@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { commentId?: number; parentReplyId?: number; message?: string; targetName?: string };
+  let body: { commentId?: number; parentReplyId?: number; message?: string; authorName?: string; targetName?: string };
   try {
     body = await request.json();
   } catch {
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
   const commentId = Number(body.commentId);
   const parentReplyId = Number(body.parentReplyId);
   const message = (body.message ?? "").trim();
+  const authorName = (body.authorName ?? "").trim();
   const targetName = (body.targetName ?? "").trim();
 
   if (!Number.isInteger(commentId) || commentId < 1) {
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
     message,
     isAdmin ? "ag" : "user",
     isAdmin ? undefined : parentReplyId,
+    authorName || (isAdmin ? "AG" : session?.username || undefined),
     targetName || undefined,
   );
 

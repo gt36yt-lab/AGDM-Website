@@ -16,6 +16,7 @@ type CommentReply = {
   message: string;
   createdAt: string;
   author: "ag" | "user";
+  authorName?: string;
   targetName?: string;
   replies?: CommentReply[];
 };
@@ -157,7 +158,7 @@ export default function AdminDashboard() {
     const res = await fetch("/api/comments/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, parentReplyId, message: draft, targetName }),
+      body: JSON.stringify({ commentId, parentReplyId, message: draft, authorName: "AG", targetName }),
     });
 
     if (!res.ok) {
@@ -189,10 +190,15 @@ export default function AdminDashboard() {
         key={reply.id}
         className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 ${depth > 0 ? "ml-4" : ""}`}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-          {reply.author === "ag" ? "AG reply" : "User reply"}
-        </p>
-        <p className="mt-1 text-sm text-[var(--text)]">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+            {reply.author === "ag" ? "AG" : reply.authorName || "User"}
+          </p>
+          {reply.targetName && (
+            <p className="text-[11px] text-[var(--text-muted)]">Replying to {reply.targetName}</p>
+          )}
+        </div>
+        <p className="mt-2 text-sm text-[var(--text)]">
           {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
         </p>
 
@@ -216,7 +222,7 @@ export default function AdminDashboard() {
         </div>
 
         {reply.replies && reply.replies.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
             {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
           </div>
         )}

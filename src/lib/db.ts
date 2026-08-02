@@ -21,6 +21,7 @@ export interface CommentReply {
   message: string;
   createdAt: string;
   author: 'ag' | 'user';
+  authorName?: string;
   targetName?: string;
   replies?: CommentReply[];
 }
@@ -371,6 +372,7 @@ export async function createReply(
   message: string,
   author: 'ag' | 'user' = 'ag',
   parentReplyId?: number,
+  authorName?: string,
   targetName?: string,
 ): Promise<CommentReply> {
   const comments = await getCloudComments();
@@ -380,12 +382,14 @@ export async function createReply(
   }
 
   const nextReplyId = getMaxReplyId(comment.replies) + 1;
+  const resolvedTargetName = targetName || (typeof parentReplyId === 'number' && parentReplyId > 0 ? undefined : comment.userName);
   const reply: CommentReply = {
     id: nextReplyId,
     message,
     createdAt: new Date().toISOString(),
     author,
-    targetName,
+    authorName,
+    targetName: resolvedTargetName,
     replies: [],
   };
 

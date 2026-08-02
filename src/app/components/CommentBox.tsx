@@ -7,6 +7,7 @@ type CommentReply = {
   message: string;
   createdAt: string;
   author: "ag" | "user";
+  authorName?: string;
   targetName?: string;
   replies?: CommentReply[];
 };
@@ -84,7 +85,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     const res = await fetch("/api/comments/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, parentReplyId, message: replyText, targetName }),
+      body: JSON.stringify({ commentId, parentReplyId, message: replyText, authorName: "You", targetName }),
     });
 
     if (!res.ok) {
@@ -102,12 +103,17 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     return (
       <div
         key={reply.id}
-        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 ${depth > 0 ? "ml-4" : ""}`}
+        className={`rounded-xl border border-white/10 bg-[var(--bg-deep)]/70 p-3 ${depth > 0 ? "ml-4" : ""}`}
       >
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-          {reply.author === "ag" ? "AG reply" : "Reply"}
-        </p>
-        <p className="mt-1 text-sm text-[var(--text)]">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+            {reply.author === "ag" ? "AG" : reply.authorName || "User"}
+          </p>
+          {reply.targetName && (
+            <p className="text-[11px] text-[var(--text-muted)]">Replying to {reply.targetName}</p>
+          )}
+        </div>
+        <p className="mt-2 text-sm text-[var(--text)]">
           {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
         </p>
 
@@ -138,7 +144,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
         )}
 
         {reply.replies && reply.replies.length > 0 && (
-          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/60 p-3">
+          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
             {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
           </div>
         )}
