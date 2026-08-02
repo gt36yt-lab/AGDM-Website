@@ -27,13 +27,34 @@ type CommentBoxProps = {
   isSignedIn: boolean;
 };
 
+type ChatMessage = {
+  id: string;
+  authorLabel: string;
+  createdAt: string;
+  message: string;
+  targetName?: string;
+};
+
+function renderMentionText(text: string) {
+  return text.split(/(@[A-Za-z0-9._-]+)/g).map((part, index) => {
+    if (!part.startsWith("@")) {
+      return <span key={`${part}-${index}`}>{part}</span>;
+    }
+
+    return (
+      <span key={`${part}-${index}`} className="font-semibold text-[var(--accent-soft)]">
+        {part}
+      </span>
+    );
+  });
+}
+
 export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [message, setMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
   const loadComments = async () => {
     const res = await fetch(`/api/comments?quoteId=${quoteId}`, { cache: "no-store" });
@@ -70,92 +91,51 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
 
     setMessage("");
     setIsAnonymous(false);
-    setStatus("Comment posted.");
+    setStatus("Message posted.");
     await loadComments();
   }
 
-  async function onReplySubmit(e: FormEvent, commentId: number, parentReplyId: number, targetName?: string) {
-    e.preventDefault();
-    if (!isSignedIn) return;
+  function flattenReplies(replies: CommentReply[]): ChatMessage[] {
+    return replies.flatMap((reply) => {
+      const rows: ChatMessage[] = [
+        {
+          id: `reply-${reply.id}`,
+          authorLabel: reply.author === "ag" ? "AG" : reply.authorName || "User",
+          createdAt: reply.createdAt,
+          message: reply.message,
+          targetName: reply.targetName,
+        },
+      ];
 
-    const key = `${commentId}-${parentReplyId}`;
-    const replyText = (replyDrafts[key] ?? "").trim();
-    if (!replyText) return;
+      if (reply.replies && reply.replies.length > 0) {
+        rows.push(...flattenReplies(reply.replies));
+      }
 
-    const res = await fetch("/api/comments/reply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, parentReplyId, message: replyText, authorName: "You", targetName }),
+      return rows;
     });
+  }
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setStatus(data.error ?? "Could not send reply.");
-      return;
+  const chatMessages = comments.flatMap((comment) => {
+    const rows: ChatMessage[] = [
+      {
+        id: `comment-${comment.id}`,
+        authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
+        createdAt: comment.createdAt,
+        message: comment.message,
+      },
+    ];
+
+    if (comment.replies && comment.replies.length > 0) {
+      rows.push(...flattenReplies(comment.replies));
     }
 
-    setReplyDrafts((prev) => ({ ...prev, [key]: "" }));
-    setStatus("Reply posted.");
-    await loadComments();
-  }
-
-  function renderReplyTree(reply: CommentReply, commentId: number, depth = 0, replyTargetName?: string) {
-    return (
-      <div
-        key={reply.id}
-        className={`rounded-xl border border-white/10 bg-[var(--bg-deep)]/70 p-3 ${depth > 0 ? "ml-4" : ""}`}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-            {reply.author === "ag" ? "AG" : reply.authorName || "User"}
-          </p>
-          {reply.targetName && (
-            <p className="text-[11px] text-[var(--text-muted)]">Replying to {reply.targetName}</p>
-          )}
-        </div>
-        <p className="mt-2 text-sm text-[var(--text)]">
-          {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
-        </p>
-
-        {isSignedIn && (
-          <form
-            onSubmit={(e) => onReplySubmit(e, commentId, reply.id, reply.targetName ?? replyTargetName)}
-            className="mt-3 space-y-2"
-          >
-            <textarea
-              value={replyDrafts[`${commentId}-${reply.id}`] ?? ""}
-              onChange={(e) =>
-                setReplyDrafts((prev) => ({
-                  ...prev,
-                  [`${commentId}-${reply.id}`]: e.target.value,
-                }))
-              }
-              rows={3}
-              placeholder="Reply to this thread…"
-              className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            />
-            <button
-              type="submit"
-              className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
-            >
-              Reply
-            </button>
-          </form>
-        )}
-
-        {reply.replies && reply.replies.length > 0 && (
-          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
-          </div>
-        )}
-      </div>
-    );
-  }
+    return rows;
+  });
 
   return (
     <section className="mt-10 w-full rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-left">
       <h2 className="text-sm font-medium uppercase tracking-[0.24em] text-[var(--text-muted)]">
-        Community thoughts
+        Community chat
       </h2>
 
       {isSignedIn ? (
@@ -164,7 +144,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={4}
-            placeholder="Share your thoughts about this quote…"
+            placeholder="Write a message or mention someone with @username"
             className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
             required
           />
@@ -183,39 +163,42 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
             disabled={loading}
             className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110 disabled:opacity-50"
           >
-            {loading ? "Posting…" : "Post comment"}
+            {loading ? "Posting…" : "Send message"}
           </button>
         </form>
       ) : (
         <p className="mt-4 text-sm text-[var(--text-muted)]">
-          Sign in to leave a public comment or post anonymously.
+          Sign in to join the chat and mention others with @username.
         </p>
       )}
 
       {status && <p className="mt-3 text-sm text-emerald-400">{status}</p>}
 
-      <div className="mt-6 space-y-4">
-        {comments.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No comments yet.</p>
+      <div className="mt-6 space-y-2">
+        {chatMessages.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No messages yet.</p>
         ) : (
-          comments.map((comment) => (
-            <article key={comment.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          chatMessages.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-[var(--bg-deep)]/70 p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[var(--accent-soft)]">
-                  {comment.userName}
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                  {item.authorLabel}
                 </p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {new Date(comment.createdAt).toLocaleString()}
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  {new Date(item.createdAt).toLocaleString()}
                 </p>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">{comment.message}</p>
-
-              {comment.replies.length > 0 && (
-                <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-[var(--bg-deep)]/70 p-3">
-                  {comment.replies.map((reply) => renderReplyTree(reply, comment.id, 0, comment.userName))}
-                </div>
-              )}
-            </article>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text)]">
+                {item.targetName ? (
+                  <>
+                    <span className="font-semibold text-[var(--accent-soft)]">@{item.targetName}</span>{" "}
+                    {renderMentionText(item.message)}
+                  </>
+                ) : (
+                  renderMentionText(item.message)
+                )}
+              </p>
+            </div>
           ))
         )}
       </div>
