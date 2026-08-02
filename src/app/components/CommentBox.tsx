@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type CommentReply = {
   id: number;
@@ -35,6 +35,11 @@ type ChatMessage = {
   targetName?: string;
 };
 
+type UserOption = {
+  id: number;
+  username: string;
+};
+
 function renderMentionText(text: string) {
   return text.split(/(@[A-Za-z0-9._-]+)/g).map((part, index) => {
     if (!part.startsWith("@")) {
@@ -55,18 +60,53 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+  const [mentionContext, setMentionContext] = useState<{ query: string; start: number | null }>({ query: "", start: null });
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     const res = await fetch(`/api/comments?quoteId=${quoteId}`, { cache: "no-store" });
     if (!res.ok) return;
 
     const data = await res.json();
-    setComments(data.comments ?? []);
-  };
+    const nextComments = data.comments ?? [];
+
+    setComments((previousComments) => {
+      if (previousComments.length === nextComments.length && JSON.stringify(previousComments) === JSON.stringify(nextComments)) {
+        return previousComments;
+      }
+      return nextComments;
+    });
+  }, [quoteId]);
 
   useEffect(() => {
-    loadComments();
-  }, [quoteId]);
+    void loadComments();
+  }, [loadComments]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadComments();
+    }, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [loadComments]);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setUserOptions([]);
+      return;
+    }
+
+    const loadUsers = async () => {
+      const res = await fetch("/api/users", { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      setUserOptions((data.users ?? []) as UserOption[]);
+    };
+
+    void loadUsers();
+  }, [isSignedIn]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -95,6 +135,40 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     await loadComments();
   }
 
+  function getMentionContext(text: string, cursor: number) {
+    const beforeCursor = text.slice(0, cursor);
+    const match = beforeCursor.match(/(?:^|\s)@([a-zA-Z0-9._-]*)$/);
+    if (!match) {
+      return { query: "", start: null };
+    }
+
+    return {
+      query: match[1],
+      start: beforeCursor.length - match[1].length - 1,
+    };
+  }
+
+  function updateMentionContext(value: string, cursor: number) {
+    setMentionContext(getMentionContext(value, cursor));
+  }
+
+  function insertMention(username: string) {
+    if (mentionContext.start === null || !textareaRef.current) return;
+
+    const start = mentionContext.start;
+    const end = textareaRef.current.selectionStart;
+    const nextValue = `${message.slice(0, start)}@${username} ${message.slice(end)}`;
+    const nextCursor = start + username.length + 2;
+
+    setMessage(nextValue);
+    updateMentionContext(nextValue, nextCursor);
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  }
+
   function flattenReplies(replies: CommentReply[]): ChatMessage[] {
     return replies.flatMap((reply) => {
       const rows: ChatMessage[] = [
@@ -115,22 +189,32 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     });
   }
 
-  const chatMessages = comments.flatMap((comment) => {
-    const rows: ChatMessage[] = [
-      {
-        id: `comment-${comment.id}`,
-        authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
-        createdAt: comment.createdAt,
-        message: comment.message,
-      },
-    ];
+  const mentionSuggestions = userOptions
+    .filter((user) => user.username.toLowerCase().includes(mentionContext.query.toLowerCase()))
+    .slice(0, 6);
 
-    if (comment.replies && comment.replies.length > 0) {
-      rows.push(...flattenReplies(comment.replies));
-    }
+  const chatMessages = comments
+    .flatMap((comment) => {
+      const rows: ChatMessage[] = [
+        {
+          id: `comment-${comment.id}`,
+          authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
+          createdAt: comment.createdAt,
+          message: comment.message,
+        },
+      ];
 
-    return rows;
-  });
+      if (comment.replies && comment.replies.length > 0) {
+        rows.push(...flattenReplies(comment.replies));
+      }
+
+      return rows;
+    })
+    .sort((a, b) => {
+      const timeDelta = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (timeDelta !== 0) return timeDelta;
+      return a.id.localeCompare(b.id);
+    });
 
   return (
     <section className="mt-10 w-full rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-left">
@@ -140,14 +224,46 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
 
       {isSignedIn ? (
         <form onSubmit={onSubmit} className="mt-4 space-y-3">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={4}
-            placeholder="Write a message or mention someone with @username"
-            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            required
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setMessage(nextValue);
+                updateMentionContext(nextValue, e.target.selectionStart);
+              }}
+              onKeyUp={(e) => {
+                if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                }
+                updateMentionContext(message, textareaRef.current?.selectionStart ?? message.length);
+              }}
+              onClick={() => updateMentionContext(message, textareaRef.current?.selectionStart ?? message.length)}
+              rows={4}
+              placeholder="Write a message or mention someone with @username"
+              className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              required
+            />
+
+            {mentionContext.start !== null && mentionSuggestions.length > 0 && (
+              <div className="absolute z-10 mt-2 w-full rounded-lg border border-white/10 bg-[var(--bg-deep)] p-2 shadow-lg">
+                {mentionSuggestions.map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insertMention(user.username);
+                    }}
+                    className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-[var(--text)] hover:bg-white/10"
+                  >
+                    @{user.username}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
             <input
