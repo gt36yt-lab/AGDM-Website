@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
   id: number;
@@ -28,6 +28,8 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
   const [message, setMessage] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const seenMessageIdsRef = useRef<Set<number>>(new Set());
 
   const loadData = useCallback(async () => {
     const res = await fetch("/api/messages", { cache: "no-store" });
@@ -36,6 +38,39 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
 
     if (isAdmin) {
       const nextConversations: Conversation[] = (data.conversations ?? []) as Conversation[];
+      const knownIds = nextConversations.flatMap((conversation) => conversation.messages.map((item) => item.id));
+
+      if (seenMessageIdsRef.current.size === 0 && knownIds.length > 0) {
+        knownIds.forEach((id) => seenMessageIdsRef.current.add(id));
+        setConversations(nextConversations);
+        if (!selectedUserId && nextConversations[0]) {
+          setSelectedUserId(nextConversations[0].userId);
+        } else if (selectedUserId && !nextConversations.some((item: Conversation) => item.userId === selectedUserId)) {
+          setSelectedUserId(nextConversations[0]?.userId ?? null);
+        }
+        return;
+      }
+
+      const newInboundMessages = nextConversations.flatMap((conversation) =>
+        conversation.messages.filter((item) => item.sender === "user" && !seenMessageIdsRef.current.has(item.id))
+      );
+
+      newInboundMessages.forEach((item) => seenMessageIdsRef.current.add(item.id));
+
+      if (newInboundMessages.length > 0) {
+        const latest = newInboundMessages[newInboundMessages.length - 1];
+        const conversation = nextConversations.find((entry) => entry.messages.some((item) => item.id === latest.id));
+        const username = conversation?.username ?? "A user";
+        const noticeText = `New private message from ${username}`;
+        setNotice(noticeText);
+
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          new Notification("New private message", {
+            body: `${username}: ${latest.message}`,
+          });
+        }
+      }
+
       setConversations(nextConversations);
       if (!selectedUserId && nextConversations[0]) {
         setSelectedUserId(nextConversations[0].userId);
@@ -66,6 +101,19 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
     setConversation(current ?? null);
   }, [conversations, selectedUserId, isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin || typeof window === "undefined") return;
+    if ("Notification" in window && Notification.permission === "default") {
+      void Notification.requestPermission();
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!message.trim()) return;
@@ -91,6 +139,12 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
 
   return (
     <section className="mt-10 w-full rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-left">
+      {notice && (
+        <div className="mb-4 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-2 text-sm text-[var(--accent-soft)]">
+          {notice}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-sm font-medium uppercase tracking-[0.24em] text-[var(--text-muted)]">
           {isAdmin ? "Private chats with users" : "Message AG"}

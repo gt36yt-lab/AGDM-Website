@@ -37,6 +37,14 @@ type UserAccount = {
   createdAt: string;
 };
 
+type ChatMessageRow = {
+  id: string;
+  authorLabel: string;
+  createdAt: string;
+  message: string;
+  targetName?: string;
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -46,7 +54,6 @@ export default function AdminDashboard() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
@@ -131,104 +138,62 @@ export default function AdminDashboard() {
     router.refresh();
   }
 
-  async function onReply(commentId: number) {
-    const draft = replyDrafts[commentId]?.trim();
-    if (!draft) return;
+  function renderMentionText(text: string) {
+    return text.split(/(@[A-Za-z0-9._-]+)/g).map((part, index) => {
+      if (!part.startsWith("@")) {
+        return <span key={`${part}-${index}`}>{part}</span>;
+      }
 
-    const res = await fetch("/api/comments/reply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, message: draft }),
+      return (
+        <span key={`${part}-${index}`} className="font-semibold text-[var(--accent-soft)]">
+          {part}
+        </span>
+      );
     });
-
-    if (!res.ok) {
-      setError("Could not save reply.");
-      return;
-    }
-
-    setReplyDrafts((prev) => ({ ...prev, [commentId]: "" }));
-    await loadComments();
   }
 
-  async function onReplyToThread(commentId: number, parentReplyId: number, targetName?: string) {
-    const key = `${commentId}-${parentReplyId}`;
-    const draft = replyDrafts[key]?.trim();
-    if (!draft) return;
+  function flattenCommentFeed(replies: CommentReply[]): ChatMessageRow[] {
+    return replies.flatMap((reply) => {
+      const rows: ChatMessageRow[] = [
+        {
+          id: `reply-${reply.id}`,
+          authorLabel: reply.author === "ag" ? "AG" : reply.authorName || "User",
+          createdAt: reply.createdAt,
+          message: reply.message,
+          targetName: reply.targetName,
+        },
+      ];
 
-    const res = await fetch("/api/comments/reply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, parentReplyId, message: draft, authorName: "AG", targetName }),
+      if (reply.replies && reply.replies.length > 0) {
+        rows.push(...flattenCommentFeed(reply.replies));
+      }
+
+      return rows;
     });
-
-    if (!res.ok) {
-      setError("Could not save reply.");
-      return;
-    }
-
-    setReplyDrafts((prev) => ({ ...prev, [key]: "" }));
-    await loadComments();
   }
 
-  async function onDeleteComment(commentId: number) {
-    if (!confirm("Delete this comment?")) return;
+  const chatMessages = comments
+    .flatMap((comment) => {
+      const rows: ChatMessageRow[] = [
+        {
+          id: `comment-${comment.id}`,
+          authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
+          createdAt: comment.createdAt,
+          message: comment.message,
+        },
+      ];
 
-    const res = await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
-    if (!res.ok) {
-      setError("Could not delete comment.");
-      return;
-    }
+      if (comment.replies && comment.replies.length > 0) {
+        rows.push(...flattenCommentFeed(comment.replies));
+      }
 
-    await loadComments();
-  }
-
-  function renderReplyTree(reply: CommentReply, commentId: number, depth = 0, replyTargetName?: string) {
-    const key = `${commentId}-${reply.id}`;
-
-    return (
-      <div
-        key={reply.id}
-        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 ${depth > 0 ? "ml-4" : ""}`}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-            {reply.author === "ag" ? "AG" : reply.authorName || "User"}
-          </p>
-          {reply.targetName && (
-            <p className="text-[11px] text-[var(--text-muted)]">Replying to {reply.targetName}</p>
-          )}
-        </div>
-        <p className="mt-2 text-sm text-[var(--text)]">
-          {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
-        </p>
-
-        <div className="mt-3 space-y-2">
-          <textarea
-            value={replyDrafts[key] ?? ""}
-            onChange={(e) =>
-              setReplyDrafts((prev) => ({ ...prev, [key]: e.target.value }))
-            }
-            rows={3}
-            placeholder="Reply to this thread…"
-            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          />
-          <button
-            type="button"
-            onClick={() => onReplyToThread(commentId, reply.id, reply.targetName ?? replyTargetName)}
-            className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
-          >
-            Reply
-          </button>
-        </div>
-
-        {reply.replies && reply.replies.length > 0 && (
-          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-white/[0.04] p-3">
-            {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
-          </div>
-        )}
-      </div>
-    );
-  }
+      return rows;
+    })
+    .sort((a, b) => {
+      const timeDelta = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (timeDelta !== 0) return timeDelta;
+      return a.id.localeCompare(b.id);
+    });
 
   return (
     <main className="mx-auto min-h-dvh max-w-2xl px-6 py-12">
@@ -335,6 +300,40 @@ export default function AdminDashboard() {
 
       <section className="mb-12">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+          Public chat
+        </h2>
+        {chatMessages.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No public messages yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {chatMessages.map((item) => (
+              <li key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-[var(--accent-soft)]">{item.authorLabel}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">
+                  {item.targetName ? (
+                    <>
+                      <span className="font-semibold text-[var(--accent-soft)]">@{item.targetName}</span>{" "}
+                      {renderMentionText(item.message)}
+                    </>
+                  ) : (
+                    renderMentionText(item.message)
+                  )}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mb-12">
+        <PrivateChat isAdmin={true} />
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
           Account users
         </h2>
         {users.length === 0 ? (
@@ -352,72 +351,6 @@ export default function AdminDashboard() {
                 <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
                   User
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mb-12">
-        <PrivateChat isAdmin={true} />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Public comments
-        </h2>
-        {comments.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No comments yet.</p>
-        ) : (
-          <ul className="space-y-4">
-            {comments.map((comment) => (
-              <li key={comment.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--accent-soft)]">
-                      {comment.userName}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">
-                      {comment.isAnonymous ? "Anonymous" : "Public name"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {new Date(comment.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">{comment.message}</p>
-                {comment.replies.length > 0 && (
-                  <div className="mt-4 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/70 p-3">
-                    {comment.replies.map((reply) => renderReplyTree(reply, comment.id, 0, comment.userName))}
-                  </div>
-                )}
-                <div className="mt-4 space-y-2">
-                  <textarea
-                    value={replyDrafts[comment.id] ?? ""}
-                    onChange={(e) =>
-                      setReplyDrafts((prev) => ({ ...prev, [comment.id]: e.target.value }))
-                    }
-                    rows={3}
-                    placeholder="Reply publicly to this comment…"
-                    className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                  />
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onReply(comment.id)}
-                      className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
-                    >
-                      Reply publicly
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteComment(comment.id)}
-                      className="rounded-lg border border-red-400/40 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10"
-                    >
-                      Delete comment
-                    </button>
-                  </div>
-                </div>
               </li>
             ))}
           </ul>
