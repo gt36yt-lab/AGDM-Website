@@ -21,6 +21,7 @@ export interface CommentReply {
   message: string;
   createdAt: string;
   author: 'ag' | 'user';
+  targetName?: string;
   replies?: CommentReply[];
 }
 
@@ -352,11 +353,25 @@ function addReplyToThread(replies: CommentReply[], targetReplyId: number, incomi
   return false;
 }
 
+function getMaxReplyId(replies: CommentReply[]): number {
+  let maxId = 0;
+
+  for (const reply of replies) {
+    maxId = Math.max(maxId, reply.id);
+    if (reply.replies && reply.replies.length > 0) {
+      maxId = Math.max(maxId, getMaxReplyId(reply.replies));
+    }
+  }
+
+  return maxId;
+}
+
 export async function createReply(
   commentId: number,
   message: string,
   author: 'ag' | 'user' = 'ag',
   parentReplyId?: number,
+  targetName?: string,
 ): Promise<CommentReply> {
   const comments = await getCloudComments();
   const comment = comments.find((item) => item.id === commentId);
@@ -364,12 +379,13 @@ export async function createReply(
     throw new Error('COMMENT_NOT_FOUND');
   }
 
-  const nextReplyId = comment.replies.length > 0 ? Math.max(...comment.replies.map((reply) => reply.id)) + 1 : 1;
+  const nextReplyId = getMaxReplyId(comment.replies) + 1;
   const reply: CommentReply = {
     id: nextReplyId,
     message,
     createdAt: new Date().toISOString(),
     author,
+    targetName,
     replies: [],
   };
 

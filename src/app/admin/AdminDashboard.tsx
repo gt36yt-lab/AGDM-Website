@@ -15,6 +15,9 @@ type CommentReply = {
   id: number;
   message: string;
   createdAt: string;
+  author: "ag" | "user";
+  targetName?: string;
+  replies?: CommentReply[];
 };
 
 type Comment = {
@@ -42,7 +45,7 @@ export default function AdminDashboard() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
@@ -146,6 +149,26 @@ export default function AdminDashboard() {
     await loadComments();
   }
 
+  async function onReplyToThread(commentId: number, parentReplyId: number, targetName?: string) {
+    const key = `${commentId}-${parentReplyId}`;
+    const draft = replyDrafts[key]?.trim();
+    if (!draft) return;
+
+    const res = await fetch("/api/comments/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentId, parentReplyId, message: draft, targetName }),
+    });
+
+    if (!res.ok) {
+      setError("Could not save reply.");
+      return;
+    }
+
+    setReplyDrafts((prev) => ({ ...prev, [key]: "" }));
+    await loadComments();
+  }
+
   async function onDeleteComment(commentId: number) {
     if (!confirm("Delete this comment?")) return;
 
@@ -156,6 +179,49 @@ export default function AdminDashboard() {
     }
 
     await loadComments();
+  }
+
+  function renderReplyTree(reply: CommentReply, commentId: number, depth = 0, replyTargetName?: string) {
+    const key = `${commentId}-${reply.id}`;
+
+    return (
+      <div
+        key={reply.id}
+        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 ${depth > 0 ? "ml-4" : ""}`}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+          {reply.author === "ag" ? "AG reply" : "User reply"}
+        </p>
+        <p className="mt-1 text-sm text-[var(--text)]">
+          {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
+        </p>
+
+        <div className="mt-3 space-y-2">
+          <textarea
+            value={replyDrafts[key] ?? ""}
+            onChange={(e) =>
+              setReplyDrafts((prev) => ({ ...prev, [key]: e.target.value }))
+            }
+            rows={3}
+            placeholder="Reply to this thread…"
+            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+          />
+          <button
+            type="button"
+            onClick={() => onReplyToThread(commentId, reply.id, reply.targetName ?? replyTargetName)}
+            className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
+          >
+            Reply
+          </button>
+        </div>
+
+        {reply.replies && reply.replies.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -316,14 +382,7 @@ export default function AdminDashboard() {
                 <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">{comment.message}</p>
                 {comment.replies.length > 0 && (
                   <div className="mt-4 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/70 p-3">
-                    {comment.replies.map((reply) => (
-                      <div key={reply.id}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                          Admin reply
-                        </p>
-                        <p className="mt-1 text-sm text-[var(--text)]">{reply.message}</p>
-                      </div>
-                    ))}
+                    {comment.replies.map((reply) => renderReplyTree(reply, comment.id, 0, comment.userName))}
                   </div>
                 )}
                 <div className="mt-4 space-y-2">

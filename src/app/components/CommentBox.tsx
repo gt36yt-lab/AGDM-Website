@@ -7,6 +7,7 @@ type CommentReply = {
   message: string;
   createdAt: string;
   author: "ag" | "user";
+  targetName?: string;
   replies?: CommentReply[];
 };
 
@@ -72,7 +73,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     await loadComments();
   }
 
-  async function onReplySubmit(e: FormEvent, commentId: number, parentReplyId: number) {
+  async function onReplySubmit(e: FormEvent, commentId: number, parentReplyId: number, targetName?: string) {
     e.preventDefault();
     if (!isSignedIn) return;
 
@@ -83,7 +84,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     const res = await fetch("/api/comments/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ commentId, parentReplyId, message: replyText }),
+      body: JSON.stringify({ commentId, parentReplyId, message: replyText, targetName }),
     });
 
     if (!res.ok) {
@@ -95,6 +96,54 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
     setReplyDrafts((prev) => ({ ...prev, [key]: "" }));
     setStatus("Reply posted.");
     await loadComments();
+  }
+
+  function renderReplyTree(reply: CommentReply, commentId: number, depth = 0, replyTargetName?: string) {
+    return (
+      <div
+        key={reply.id}
+        className={`rounded-lg border border-white/10 bg-white/[0.03] p-3 ${depth > 0 ? "ml-4" : ""}`}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+          {reply.author === "ag" ? "AG reply" : "Reply"}
+        </p>
+        <p className="mt-1 text-sm text-[var(--text)]">
+          {reply.targetName ? `@${reply.targetName} ${reply.message}` : reply.message}
+        </p>
+
+        {isSignedIn && (
+          <form
+            onSubmit={(e) => onReplySubmit(e, commentId, reply.id, reply.targetName ?? replyTargetName)}
+            className="mt-3 space-y-2"
+          >
+            <textarea
+              value={replyDrafts[`${commentId}-${reply.id}`] ?? ""}
+              onChange={(e) =>
+                setReplyDrafts((prev) => ({
+                  ...prev,
+                  [`${commentId}-${reply.id}`]: e.target.value,
+                }))
+              }
+              rows={3}
+              placeholder="Reply to this thread…"
+              className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
+            >
+              Reply
+            </button>
+          </form>
+        )}
+
+        {reply.replies && reply.replies.length > 0 && (
+          <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/60 p-3">
+            {reply.replies.map((childReply) => renderReplyTree(childReply, commentId, depth + 1, reply.targetName ?? replyTargetName))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -157,53 +206,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
 
               {comment.replies.length > 0 && (
                 <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-[var(--bg-deep)]/70 p-3">
-                  {comment.replies.map((reply) => (
-                    <div key={reply.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                        {reply.author === "ag" ? "AG reply" : "Your reply"}
-                      </p>
-                      <p className="mt-1 text-sm text-[var(--text)]">{reply.message}</p>
-
-                      {reply.author === "ag" && isSignedIn && (
-                        <form
-                          onSubmit={(e) => onReplySubmit(e, comment.id, reply.id)}
-                          className="mt-3 space-y-2"
-                        >
-                          <textarea
-                            value={replyDrafts[`${comment.id}-${reply.id}`] ?? ""}
-                            onChange={(e) =>
-                              setReplyDrafts((prev) => ({
-                                ...prev,
-                                [`${comment.id}-${reply.id}`]: e.target.value,
-                              }))
-                            }
-                            rows={3}
-                            placeholder="Reply to AG’s reply…"
-                            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                          />
-                          <button
-                            type="submit"
-                            className="rounded-lg bg-[var(--accent)] px-3 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
-                          >
-                            Reply to AG
-                          </button>
-                        </form>
-                      )}
-
-                      {reply.replies && reply.replies.length > 0 && (
-                        <div className="mt-3 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/60 p-3">
-                          {reply.replies.map((childReply) => (
-                            <div key={childReply.id}>
-                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                                {childReply.author === "ag" ? "AG reply" : "Your reply"}
-                              </p>
-                              <p className="mt-1 text-sm text-[var(--text)]">{childReply.message}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {comment.replies.map((reply) => renderReplyTree(reply, comment.id, 0, comment.userName))}
                 </div>
               )}
             </article>
