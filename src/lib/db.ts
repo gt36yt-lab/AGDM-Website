@@ -16,8 +16,26 @@ export interface User {
   createdAt: string;
 }
 
+export interface CommentReply {
+  id: number;
+  message: string;
+  createdAt: string;
+}
+
+export interface Comment {
+  id: number;
+  quoteId: number;
+  userId: number;
+  userName: string;
+  message: string;
+  isAnonymous: boolean;
+  createdAt: string;
+  replies: CommentReply[];
+}
+
 const QUOTES_BLOB_FILENAME = 'quotes.json';
 const USERS_BLOB_FILENAME = 'users.json';
+const COMMENTS_BLOB_FILENAME = 'comments.json';
 const HASH_ITERATIONS = 310000;
 const HASH_LENGTH = 32;
 
@@ -72,6 +90,14 @@ async function getCloudUsers(): Promise<User[]> {
 
 async function saveCloudUsers(users: User[]): Promise<void> {
   await saveCloudJson(USERS_BLOB_FILENAME, users);
+}
+
+async function getCloudComments(): Promise<Comment[]> {
+  return await getCloudJson<Comment[]>(COMMENTS_BLOB_FILENAME, []);
+}
+
+async function saveCloudComments(comments: Comment[]): Promise<void> {
+  await saveCloudJson(COMMENTS_BLOB_FILENAME, comments);
 }
 
 function hashPassword(password: string, salt: string): string {
@@ -178,4 +204,61 @@ export async function verifyUserPassword(userId: number, password: string): Prom
   const suppliedBuffer = Buffer.from(suppliedHash, 'hex');
 
   return timingSafeEqual(suppliedBuffer, expectedHash);
+}
+
+export async function createComment(
+  quoteId: number,
+  userId: number,
+  message: string,
+  isAnonymous: boolean,
+  userName: string,
+): Promise<Comment> {
+  const comments = await getCloudComments();
+  const nextId = comments.length > 0 ? Math.max(...comments.map((comment) => comment.id)) + 1 : 1;
+
+  const comment: Comment = {
+    id: nextId,
+    quoteId,
+    userId,
+    userName: isAnonymous ? 'Anonymous' : userName,
+    message,
+    isAnonymous,
+    createdAt: new Date().toISOString(),
+    replies: [],
+  };
+
+  comments.push(comment);
+  await saveCloudComments(comments);
+  return comment;
+}
+
+export async function listCommentsForQuote(quoteId: number): Promise<Comment[]> {
+  const comments = await getCloudComments();
+  return comments
+    .filter((comment) => comment.quoteId === quoteId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function listAllComments(): Promise<Comment[]> {
+  const comments = await getCloudComments();
+  return comments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function createReply(commentId: number, message: string): Promise<CommentReply> {
+  const comments = await getCloudComments();
+  const comment = comments.find((item) => item.id === commentId);
+  if (!comment) {
+    throw new Error('COMMENT_NOT_FOUND');
+  }
+
+  const nextReplyId = comment.replies.length > 0 ? Math.max(...comment.replies.map((reply) => reply.id)) + 1 : 1;
+  const reply: CommentReply = {
+    id: nextReplyId,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+
+  comment.replies.push(reply);
+  await saveCloudComments(comments);
+  return reply;
 }

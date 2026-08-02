@@ -8,6 +8,7 @@ import {
 } from "@/lib/dates";
 import { getLatestQuoteOnOrBefore, getQuoteForDate } from "@/lib/db";
 import { getUserSession } from "@/lib/auth";
+import CommentBox from "@/app/components/CommentBox";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -80,6 +81,10 @@ export default async function HomePage() {
             Check back soon for today&apos;s motivation from AG.
           </p>
         </div>
+      )}
+
+      {quote && (
+        <CommentBox quoteId={quote.id} isSignedIn={Boolean(session)} />
       )}
 
       <footer className="mt-20 text-xs text-[var(--text-muted)] opacity-60">

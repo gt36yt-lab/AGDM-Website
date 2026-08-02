@@ -10,13 +10,31 @@ type Quote = {
   scheduledDate: string;
 };
 
+type CommentReply = {
+  id: number;
+  message: string;
+  createdAt: string;
+};
+
+type Comment = {
+  id: number;
+  quoteId: number;
+  userName: string;
+  message: string;
+  isAnonymous: boolean;
+  createdAt: string;
+  replies: CommentReply[];
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
@@ -30,9 +48,20 @@ export default function AdminDashboard() {
     setLoading(false);
   }, [router]);
 
+  const loadComments = useCallback(async () => {
+    const res = await fetch("/api/comments?mode=admin", { cache: "no-store" });
+    if (res.status === 401) {
+      router.push("/admin/login");
+      return;
+    }
+    const data = await res.json();
+    setComments(data.comments ?? []);
+  }, [router]);
+
   useEffect(() => {
     loadQuotes();
-  }, [loadQuotes]);
+    loadComments();
+  }, [loadQuotes, loadComments]);
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
@@ -77,6 +106,25 @@ export default function AdminDashboard() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/admin/login");
     router.refresh();
+  }
+
+  async function onReply(commentId: number) {
+    const draft = replyDrafts[commentId]?.trim();
+    if (!draft) return;
+
+    const res = await fetch("/api/comments/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentId, message: draft }),
+    });
+
+    if (!res.ok) {
+      setError("Could not save reply.");
+      return;
+    }
+
+    setReplyDrafts((prev) => ({ ...prev, [commentId]: "" }));
+    await loadComments();
   }
 
   return (
@@ -144,7 +192,7 @@ export default function AdminDashboard() {
         </button>
       </form>
 
-      <section>
+      <section className="mb-12">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
           Upcoming &amp; past
         </h2>
@@ -176,6 +224,66 @@ export default function AdminDashboard() {
                 >
                   Delete
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+          Public comments
+        </h2>
+        {comments.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No comments yet.</p>
+        ) : (
+          <ul className="space-y-4">
+            {comments.map((comment) => (
+              <li key={comment.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--accent-soft)]">
+                      {comment.userName}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      {comment.isAnonymous ? "Anonymous" : "Public name"}
+                    </p>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">{comment.message}</p>
+                {comment.replies.length > 0 && (
+                  <div className="mt-4 space-y-2 rounded-lg border border-white/10 bg-[var(--bg-deep)]/70 p-3">
+                    {comment.replies.map((reply) => (
+                      <div key={reply.id}>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                          Admin reply
+                        </p>
+                        <p className="mt-1 text-sm text-[var(--text)]">{reply.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4 space-y-2">
+                  <textarea
+                    value={replyDrafts[comment.id] ?? ""}
+                    onChange={(e) =>
+                      setReplyDrafts((prev) => ({ ...prev, [comment.id]: e.target.value }))
+                    }
+                    rows={3}
+                    placeholder="Reply publicly to this comment…"
+                    className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onReply(comment.id)}
+                    className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
+                  >
+                    Reply publicly
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
