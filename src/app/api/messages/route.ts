@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getUserSession, requireAdmin } from "@/lib/auth";
+import { getUserSession, isAdminSession } from "@/lib/auth";
 import { getConversationByUserId, getOrCreateConversation, listConversations, sendMessageToConversation } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get("cookie");
-  const isAdmin = await requireAdmin(cookie);
+  const isAdmin = await isAdminSession(cookie);
   const session = await getUserSession(cookie);
 
   if (isAdmin) {
@@ -30,9 +30,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const cookie = request.headers.get("cookie");
   const session = await getUserSession(cookie);
-  const denied = await requireAdmin(cookie);
+  const isAdmin = await isAdminSession(cookie);
 
-  if (!session && denied) {
+  if (!session && !isAdmin) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ ok: true });
   }
 
-  if (denied) {
+  if (!isAdmin) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
