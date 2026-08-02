@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import PrivateChat from "@/app/components/PrivateChat";
+import { getQuoteTimezone, todayInTimezone } from "@/lib/dates";
 
 type Quote = {
   id: number;
@@ -58,6 +59,7 @@ export default function AdminDashboard() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [chatAnonymous, setChatAnonymous] = useState(false);
+  const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
@@ -96,6 +98,23 @@ export default function AdminDashboard() {
     loadComments();
     loadUsers();
   }, [loadQuotes, loadComments, loadUsers]);
+
+  useEffect(() => {
+    const timezone = getQuoteTimezone();
+    const today = todayInTimezone(timezone);
+
+    const exactMatch = quotes.find((quote) => quote.scheduledDate === today);
+    if (exactMatch) {
+      setActiveQuoteId(exactMatch.id);
+      return;
+    }
+
+    const latestMatch = [...quotes]
+      .filter((quote) => quote.scheduledDate <= today)
+      .sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate))[0];
+
+    setActiveQuoteId(latestMatch?.id ?? null);
+  }, [quotes]);
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
@@ -149,10 +168,12 @@ export default function AdminDashboard() {
     setChatLoading(true);
     setChatStatus("");
 
+    const targetQuoteId = activeQuoteId ?? 1;
+
     const res = await fetch("/api/comments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ quoteId: 1, message: chatMessage, isAnonymous: chatAnonymous }),
+      body: JSON.stringify({ quoteId: targetQuoteId, message: chatMessage, isAnonymous: chatAnonymous }),
     });
 
     setChatLoading(false);
