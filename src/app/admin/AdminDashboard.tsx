@@ -54,6 +54,10 @@ export default function AdminDashboard() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [chatStatus, setChatStatus] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatAnonymous, setChatAnonymous] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadQuotes = useCallback(async () => {
@@ -136,6 +140,46 @@ export default function AdminDashboard() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/admin/login");
     router.refresh();
+  }
+
+  async function onSubmitChat(e: FormEvent) {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+
+    setChatLoading(true);
+    setChatStatus("");
+
+    const res = await fetch("/api/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quoteId: 1, message: chatMessage, isAnonymous: chatAnonymous }),
+    });
+
+    setChatLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setChatStatus(data.error ?? "Could not post comment.");
+      return;
+    }
+
+    setChatMessage("");
+    setChatAnonymous(false);
+    setChatStatus("Message posted.");
+    await loadComments();
+  }
+
+  async function onDeleteComment(commentId: number) {
+    if (!confirm("Delete this comment?")) return;
+
+    const res = await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
+    if (!res.ok) {
+      setChatStatus("Could not delete comment.");
+      return;
+    }
+
+    setChatStatus("Comment deleted.");
+    await loadComments();
   }
 
   function renderMentionText(text: string) {
@@ -302,6 +346,36 @@ export default function AdminDashboard() {
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
           Public chat
         </h2>
+
+        <form onSubmit={onSubmitChat} className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <textarea
+            value={chatMessage}
+            onChange={(e) => setChatMessage(e.target.value)}
+            rows={4}
+            placeholder="Write a public comment for the main page…"
+            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            required
+          />
+          <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+            <input
+              type="checkbox"
+              checked={chatAnonymous}
+              onChange={(e) => setChatAnonymous(e.target.checked)}
+            />
+            Post anonymously
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={chatLoading}
+              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110 disabled:opacity-50"
+            >
+              {chatLoading ? "Posting…" : "Post comment"}
+            </button>
+            {chatStatus && <p className="text-sm text-emerald-400">{chatStatus}</p>}
+          </div>
+        </form>
+
         {chatMessages.length === 0 ? (
           <p className="text-sm text-[var(--text-muted)]">No public messages yet.</p>
         ) : (
@@ -310,7 +384,18 @@ export default function AdminDashboard() {
               <li key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-[var(--accent-soft)]">{item.authorLabel}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
+                    {item.id.startsWith("comment-") && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteComment(Number(item.id.replace("comment-", "")))}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">
                   {item.targetName ? (
