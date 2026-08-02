@@ -7,7 +7,7 @@ import {
   todayInTimezone,
 } from "@/lib/dates";
 import { getLatestQuoteOnOrBefore, getQuoteForDate } from "@/lib/db";
-import { getUserSession } from "@/lib/auth";
+import { getUserSession, isAdminSession } from "@/lib/auth";
 import CommentBox from "@/app/components/CommentBox";
 import PrivateChat from "@/app/components/PrivateChat";
 
@@ -16,9 +16,10 @@ export const revalidate = 0;
 
 export default async function HomePage() {
   const cookie = (await headers()).get("cookie");
+  const isAdmin = await isAdminSession(cookie);
   const session = await getUserSession(cookie);
 
-  if (!session) {
+  if (!session && !isAdmin) {
     redirect("/account/login");
   }
 
@@ -32,7 +33,7 @@ export default async function HomePage() {
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center px-6 py-16 text-center">
       <div className="mb-8 flex items-center gap-3 text-sm text-[var(--text-muted)]">
         <span>
-          Signed in as <span className="font-semibold text-[var(--accent-soft)]">{session.username}</span>
+          Signed in as <span className="font-semibold text-[var(--accent-soft)]">{isAdmin ? "AG" : session?.username}</span>
         </span>
         <Link href="/profile" className="text-xs text-[var(--text-muted)] hover:text-[var(--accent-soft)]">
           View profile
@@ -86,7 +87,7 @@ export default async function HomePage() {
 
       {quote && (
         <>
-          <CommentBox quoteId={quote.id} isSignedIn={Boolean(session)} />
+          <CommentBox quoteId={quote.id} isSignedIn={Boolean(session || isAdmin)} />
           <PrivateChat isAdmin={false} />
         </>
       )}

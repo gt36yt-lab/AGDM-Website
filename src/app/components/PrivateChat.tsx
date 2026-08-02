@@ -73,8 +73,8 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
     setLoading(true);
 
     const payload = isAdmin
-      ? { conversationId: conversation?.id, userId: selectedUserId, message }
-      : { message };
+      ? { conversationId: conversation?.id, userId: selectedUserId, message, role: "admin" }
+      : { message, role: "user" };
 
     const res = await fetch("/api/messages", {
       method: "POST",

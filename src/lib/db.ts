@@ -222,6 +222,11 @@ export async function getUserById(id: number): Promise<User | null> {
   return users.find((user) => user.id === id) ?? null;
 }
 
+export async function listUsers(): Promise<User[]> {
+  const users = await getCloudUsers();
+  return users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
 export async function verifyUserPassword(userId: number, password: string): Promise<boolean> {
   const user = await getUserById(userId);
   if (!user) return false;

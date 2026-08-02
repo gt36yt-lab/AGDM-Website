@@ -27,10 +27,17 @@ type Comment = {
   replies: CommentReply[];
 };
 
+type UserAccount = {
+  id: number;
+  username: string;
+  createdAt: string;
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
   const [text, setText] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [message, setMessage] = useState("");
@@ -59,10 +66,21 @@ export default function AdminDashboard() {
     setComments(data.comments ?? []);
   }, [router]);
 
+  const loadUsers = useCallback(async () => {
+    const res = await fetch("/api/users", { cache: "no-store" });
+    if (res.status === 401) {
+      router.push("/admin/login");
+      return;
+    }
+    const data = await res.json();
+    setUsers(data.users ?? []);
+  }, [router]);
+
   useEffect(() => {
     loadQuotes();
     loadComments();
-  }, [loadQuotes, loadComments]);
+    loadUsers();
+  }, [loadQuotes, loadComments, loadUsers]);
 
   async function onAdd(e: FormEvent) {
     e.preventDefault();
@@ -237,6 +255,31 @@ export default function AdminDashboard() {
                 >
                   Delete
                 </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mb-12">
+        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+          Account users
+        </h2>
+        {users.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
+        ) : (
+          <ul className="space-y-3">
+            {users.map((user) => (
+              <li key={user.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--accent-soft)]">{user.username}</p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Joined {new Date(user.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                  User
+                </span>
               </li>
             ))}
           </ul>

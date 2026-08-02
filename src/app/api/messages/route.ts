@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { conversationId?: number; message?: string; userId?: number };
+  let body: { conversationId?: number; message?: string; userId?: number; role?: "user" | "admin" };
   try {
     body = await request.json();
   } catch {
@@ -44,29 +44,30 @@ export async function POST(request: NextRequest) {
   }
 
   const message = (body.message ?? "").trim();
+  const requestedRole = body.role;
   if (!message) {
     return Response.json({ error: "Please write a message." }, { status: 400 });
   }
 
-  if (session) {
-    const conversation = await getOrCreateConversation(session.id, session.username);
-    await sendMessageToConversation(conversation.id, "user", message, session.id);
+  if (requestedRole === "admin" || (requestedRole !== "user" && isAdmin)) {
+    const conversationId = Number(body.conversationId);
+    const userId = Number(body.userId);
+    if (!Number.isInteger(conversationId) || conversationId < 1) {
+      return Response.json({ error: "Invalid conversationId" }, { status: 400 });
+    }
+    if (!Number.isInteger(userId) || userId < 1) {
+      return Response.json({ error: "Invalid userId" }, { status: 400 });
+    }
+
+    await sendMessageToConversation(conversationId, "ag", message, userId);
     return Response.json({ ok: true });
   }
 
-  if (!isAdmin) {
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const conversationId = Number(body.conversationId);
-  const userId = Number(body.userId);
-  if (!Number.isInteger(conversationId) || conversationId < 1) {
-    return Response.json({ error: "Invalid conversationId" }, { status: 400 });
-  }
-  if (!Number.isInteger(userId) || userId < 1) {
-    return Response.json({ error: "Invalid userId" }, { status: 400 });
-  }
-
-  await sendMessageToConversation(conversationId, "ag", message, userId);
+  const conversation = await getOrCreateConversation(session.id, session.username);
+  await sendMessageToConversation(conversation.id, "user", message, session.id);
   return Response.json({ ok: true });
 }
