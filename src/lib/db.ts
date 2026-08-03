@@ -150,6 +150,15 @@ async function getPrivateMessagesForConversation(client: ReturnType<typeof getSu
   return Array.isArray(data) ? data.map((entry) => normalizePrivateMessage(entry as Record<string, unknown>)) : [];
 }
 
+async function getConversationMessages(client: ReturnType<typeof getSupabaseClient>, conversation: Conversation): Promise<ChatMessage[]> {
+  if (!conversation.messages.length) {
+    const fallbackMessages = await getPrivateMessagesForConversation(client, conversation.id);
+    return fallbackMessages;
+  }
+
+  return conversation.messages;
+}
+
 export async function listQuotes(): Promise<Quote[]> {
   const client = getSupabaseClient();
   if (!client) return [];
@@ -392,7 +401,7 @@ export async function getOrCreateConversation(userId: number, username: string):
   const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
   if (!error && Array.isArray(data) && data[0]) {
     const conversation = normalizeConversation(data[0] as Record<string, unknown>);
-    conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+    conversation.messages = await getConversationMessages(client, conversation);
     return conversation;
   }
 
@@ -436,7 +445,7 @@ export async function getConversationByUserId(userId: number): Promise<Conversat
   if (!Array.isArray(data) || !data[0]) return null;
 
   const conversation = normalizeConversation(data[0] as Record<string, unknown>);
-  conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+  conversation.messages = await getConversationMessages(client, conversation);
   return conversation;
 }
 
@@ -454,7 +463,7 @@ export async function listConversations(): Promise<Conversation[]> {
 
   const conversations = await Promise.all(data.map(async (entry) => {
     const conversation = normalizeConversation(entry as Record<string, unknown>);
-    conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+    conversation.messages = await getConversationMessages(client, conversation);
     return conversation;
   }));
 
@@ -492,6 +501,16 @@ export async function sendMessageToConversation(
     createdAt: new Date().toISOString(),
   };
 
+  const nextMessages = [...existingMessages, chatMessage];
+  const { error: updateError } = await client.from('conversations').update({
+    messages: nextMessages,
+  }).eq('id', conversationId);
+
+  if (updateError) {
+    console.error('Supabase conversation update failed:', updateError);
+    throw new Error(updateError.message || 'Could not save message');
+  }
+
   const { error: insertError } = await client.from('private_messages').insert({
     conversation_id: conversationId,
     sender: chatMessage.sender,
@@ -502,15 +521,6 @@ export async function sendMessageToConversation(
 
   if (insertError) {
     console.error('Supabase private message insert failed:', insertError);
-    throw new Error(insertError.message || 'Could not save message');
-  }
-
-  const { error: updateError } = await client.from('conversations').update({
-    messages: [...existingMessages, chatMessage],
-  }).eq('id', conversationId);
-
-  if (updateError) {
-    console.error('Supabase conversation update failed:', updateError);
   }
 
   return chatMessage;
