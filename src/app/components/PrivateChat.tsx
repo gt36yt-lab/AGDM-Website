@@ -114,6 +114,23 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
+  async function onClearConversation() {
+    if (!conversation?.id) return;
+
+    const res = await fetch(`/api/messages?conversationId=${conversation.id}`, {
+      method: "DELETE",
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      setNotice("Could not clear this chat history.");
+      return;
+    }
+
+    setNotice("Chat history cleared.");
+    await loadData();
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!message.trim()) return;
@@ -150,17 +167,26 @@ export default function PrivateChat({ isAdmin }: PrivateChatProps) {
           {isAdmin ? "Private chats with users" : "Message AG"}
         </h2>
         {isAdmin && conversations.length > 0 && (
-          <select
-            value={selectedUserId ?? ""}
-            onChange={(e) => setSelectedUserId(Number(e.target.value))}
-            className="rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            {conversations.map((item) => (
-              <option key={item.userId} value={item.userId}>
-                {item.username}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedUserId ?? ""}
+              onChange={(e) => setSelectedUserId(Number(e.target.value))}
+              className="rounded-lg border border-white/10 bg-[var(--bg-deep)] px-3 py-2 text-sm text-[var(--text)]"
+            >
+              {conversations.map((item) => (
+                <option key={item.userId} value={item.userId}>
+                  {item.username}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={onClearConversation}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              Clear history
+            </button>
+          </div>
         )}
       </div>
 

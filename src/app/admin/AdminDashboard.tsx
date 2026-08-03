@@ -139,6 +139,7 @@ export default function AdminDashboard() {
     setScheduledDate("");
     setMessage("Quote scheduled.");
     await loadQuotes();
+    await loadComments();
   }
 
   async function onDelete(id: number) {
@@ -201,6 +202,19 @@ export default function AdminDashboard() {
 
     setChatStatus("Comment deleted.");
     await loadComments();
+  }
+
+  async function onDeleteUser(userId: number, username: string) {
+    if (!confirm(`Delete account "${username}"?`)) return;
+
+    const res = await fetch(`/api/users?id=${userId}`, { method: "DELETE", cache: "no-store" });
+    if (!res.ok) {
+      setError("Could not delete account.");
+      return;
+    }
+
+    setMessage(`Deleted account ${username}.`);
+    await loadUsers();
   }
 
   function renderMentionText(text: string) {
@@ -454,9 +468,13 @@ export default function AdminDashboard() {
                     Joined {new Date(user.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <span className="rounded-full border border-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                  User
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onDeleteUser(user.id, user.username)}
+                  className="rounded-full border border-red-400/30 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-400 hover:bg-red-400/10"
+                >
+                  Delete
+                </button>
               </li>
             ))}
           </ul>

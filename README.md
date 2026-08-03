@@ -1,49 +1,69 @@
-# AG Daily Motivation
+# 🌟 AG Daily Motivation
 
-A small public site that shows **one motivational quote per day**, plus a private admin area where you schedule quotes in advance.
+A quiet, intentional digital corner designed to share daily inspiration, grounded reflections, and words to live by.
 
-## What visitors see
+---
 
-- Open `/` — today&apos;s quote (timezone defaults to **Asia/Manila**, configurable).
-- If you haven&apos;t posted for today yet, they see your **most recent** quote with a short note.
+## 🍃 Why This Exists
 
-## What you see (admin)
+This project started as my personal safe space—a daily journal of the mindset, quotes, and reflections guiding me through each day. 
 
-- Go to `/admin` and sign in with your password.
-- Pick a **date** and **quote text** — one quote per day.
-- Review or delete scheduled quotes.
+Life moves fast, and it’s easy to get overwhelmed. **AG Daily Motivation** was created to be a gentle pause in the routine. While it serves as my personal grounding tool, it is open to anyone looking for a daily spark of encouragement, perspective, or quiet reassurance.
 
-## Run locally
+> *"One quote a day—simple, intentional, and real."*
 
-**You need [Node.js](https://nodejs.org/) (LTS) installed.** It wasn&apos;t detected on this machine when the project was created.
+---
 
+## ✨ For Visitors & Readers
+
+* **A Single Daily Focus:** No infinite scrolling or noise. Just one meaningful quote for the day to reflect on.
+* **Always Present:** If today’s quote isn't up yet, the space gently defaults to the most recent inspiration so you never walk away empty-handed.
+* **Localized Time:** Mindful of time zones (defaulted to `Asia/Manila`), ensuring today's message aligns with your day.
+
+---
+
+## 🛠️ Built With
+
+Designed to be lightweight, fast, and self-contained:
+
+* **Framework:** Next.js (App Router)
+* **Storage:** File-based JSON storage (`data/quotes.json`)
+* **Styling & UI:** Clean, distraction-free interface
+* **Authentication:** Password-protected admin route for scheduling and managing quotes
+
+---
+
+## 🚀 Quickstart & Setup
+
+If you'd like to host your own instance or run it locally:
+
+### 1. Prerequisites
+Ensure you have **Node.js (LTS)** installed.
+
+### 2. Local Setup
 ```bash
-cd Projects/ag-daily-motivation
-copy .env.example .env
-# Edit .env: set ADMIN_PASSWORD and SESSION_SECRET
+# Clone and enter the repository
+cd ag-daily-motivation
+
+# Set up environment variables
+cp .env.example .env
+
+# Install dependencies and run locally
 npm install
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) to view the site, or visit [http://localhost:3000/admin](http://localhost:3000/admin) to manage quotes.
 
-Open [http://localhost:3000](http://localhost:3000). Admin: [http://localhost:3000/admin](http://localhost:3000/admin).
+### 3. Environment Variables
 
-## Environment
+| Variable | Description |
+| :--- | :--- |
+| `ADMIN_PASSWORD` | Secret password for admin access |
+| `SESSION_SECRET` | Random secure string for cookie sessions (16+ chars) |
+| `QUOTE_TIMEZONE` | IANA timezone (Defaults to `Asia/Manila`) |
 
-| Variable | Purpose |
-|----------|---------|
-| `ADMIN_PASSWORD` | Your secret login password |
-| `SESSION_SECRET` | Random string for secure cookies (16+ chars) |
-| `QUOTE_TIMEZONE` | IANA timezone for &quot;today&quot; (default `Asia/Manila`) |
+---
 
-## Deploying
+## 📦 Deployment Note
 
-Quotes are stored in `data/quotes.json`. Use a host with a **persistent disk** (Railway, Render, Fly.io, a VPS), not plain serverless without storage.
-
-After deploy, set the same env vars and keep the `data/` volume so quotes survive restarts.
-
-## Project layout
-
-- `src/app/page.tsx` — public daily quote
-- `src/app/admin/` — login + scheduler
-- `src/lib/db.ts` — quote storage (`data/quotes.json`)
-- `src/app/api/` — auth and quote APIs
+Because quotes are stored locally in `data/quotes.json`, deploy using a platform that supports **persistent disk storage** (e.g., Railway, Render, Fly.io, or a private VPS) to ensure your scheduled quotes persist across restarts.

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { getUserSession, isAdminSession } from "@/lib/auth";
-import { getConversationByUserId, getOrCreateConversation, listConversations, sendMessageToConversation } from "@/lib/db";
+import { getUserSession, isAdminSession, requireAdmin } from "@/lib/auth";
+import { clearConversationMessages, getConversationByUserId, getOrCreateConversation, listConversations, sendMessageToConversation } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,6 +25,23 @@ export async function GET(request: NextRequest) {
   }
 
   return Response.json({ conversation });
+}
+
+export async function DELETE(request: NextRequest) {
+  const denied = await requireAdmin(request.headers.get("cookie"));
+  if (denied) return denied;
+
+  const conversationId = Number(new URL(request.url).searchParams.get("conversationId"));
+  if (!Number.isInteger(conversationId) || conversationId < 1) {
+    return Response.json({ error: "Invalid conversationId" }, { status: 400 });
+  }
+
+  const cleared = await clearConversationMessages(conversationId);
+  if (!cleared) {
+    return Response.json({ error: "Conversation not found" }, { status: 404 });
+  }
+
+  return Response.json({ ok: true });
 }
 
 export async function POST(request: NextRequest) {

@@ -153,6 +153,7 @@ export async function createQuote(text: string, scheduledDate: string): Promise<
   quotes.push(newQuote);
 
   await saveCloudQuotes(quotes);
+  await saveCloudComments([]);
   return newQuote;
 }
 
@@ -229,6 +230,29 @@ export async function listUsers(): Promise<User[]> {
   return users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+export async function deleteUser(id: number): Promise<boolean> {
+  const users = await getCloudUsers();
+  const index = users.findIndex((user) => user.id === id);
+  if (index === -1) return false;
+
+  users.splice(index, 1);
+  await saveCloudUsers(users);
+
+  const conversations = await getCloudConversations();
+  const filteredConversations = conversations.filter((conversation) => conversation.userId !== id);
+  if (filteredConversations.length !== conversations.length) {
+    await saveCloudConversations(filteredConversations);
+  }
+
+  const comments = await getCloudComments();
+  const filteredComments = comments.filter((comment) => comment.userId !== id);
+  if (filteredComments.length !== comments.length) {
+    await saveCloudComments(filteredComments);
+  }
+
+  return true;
+}
+
 export async function verifyUserPassword(userId: number, password: string): Promise<boolean> {
   const user = await getUserById(userId);
   if (!user) return false;
@@ -297,6 +321,16 @@ export async function sendMessageToConversation(
   conversation.messages.push(chatMessage);
   await saveCloudConversations(conversations);
   return chatMessage;
+}
+
+export async function clearConversationMessages(conversationId: number): Promise<boolean> {
+  const conversations = await getCloudConversations();
+  const conversation = conversations.find((item) => item.id === conversationId);
+  if (!conversation) return false;
+
+  conversation.messages = [];
+  await saveCloudConversations(conversations);
+  return true;
 }
 
 export async function createComment(
