@@ -398,9 +398,9 @@ export async function getOrCreateConversation(userId: number, username: string):
     return { id: 0, userId, username, createdAt: new Date().toISOString(), messages: [] };
   }
 
-  const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
-  if (!error && Array.isArray(data) && data[0]) {
-    const conversation = normalizeConversation(data[0] as Record<string, unknown>);
+  const { data: existingConversationRow, error } = await client.from('conversations').select('*').eq('user_id', userId).maybeSingle();
+  if (!error && existingConversationRow) {
+    const conversation = normalizeConversation(existingConversationRow as Record<string, unknown>);
     conversation.messages = await getConversationMessages(client, conversation);
     return conversation;
   }
@@ -409,27 +409,28 @@ export async function getOrCreateConversation(userId: number, username: string):
     console.error('Supabase conversation lookup failed:', error);
   }
 
+  const createdAt = new Date().toISOString();
   const conversation: Conversation = {
     id: Date.now(),
     userId,
     username,
-    createdAt: new Date().toISOString(),
+    createdAt,
     messages: [],
   };
 
-  const { error: insertError } = await client.from('conversations').insert({
-    id: conversation.id,
+  const { data: insertedConversationRow, error: insertError } = await client.from('conversations').insert({
     user_id: conversation.userId,
     username: conversation.username,
     created_at: conversation.createdAt,
     messages: [],
-  });
+  }).select('*').single();
 
-  if (insertError) {
+  if (insertError || !insertedConversationRow) {
     console.error('Supabase conversation insert failed:', insertError);
+    throw new Error(insertError?.message || 'Could not create conversation');
   }
 
-  return conversation;
+  return normalizeConversation(insertedConversationRow as Record<string, unknown>);
 }
 
 export async function getConversationByUserId(userId: number): Promise<Conversation | null> {
@@ -504,7 +505,7 @@ export async function sendMessageToConversation(
   const nextMessages = [...existingMessages, chatMessage];
   const { error: updateError } = await client.from('conversations').update({
     messages: nextMessages,
-  }).eq('id', conversationId);
+  }).eq('id', conversationId).select('*').single();
 
   if (updateError) {
     console.error('Supabase conversation update failed:', updateError);
