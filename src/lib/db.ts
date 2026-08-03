@@ -1,14 +1,10 @@
 import { randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { put, get } from '@vercel/blob';
 import { getSupabaseClient } from './supabase';
 
-// The interface structure for your website's quotes
 export interface Quote {
   id: number;
   text: string;
-  scheduledDate: string; // Expected format: YYYY-MM-DD
+  scheduledDate: string;
 }
 
 export interface User {
@@ -56,135 +52,8 @@ export interface Conversation {
   messages: ChatMessage[];
 }
 
-const QUOTES_BLOB_FILENAME = 'quotes.json';
-const USERS_BLOB_FILENAME = 'users.json';
-const COMMENTS_BLOB_FILENAME = 'comments.json';
-const CONVERSATIONS_BLOB_FILENAME = 'conversations.json';
 const HASH_ITERATIONS = 310000;
 const HASH_LENGTH = 32;
-const DATA_DIRECTORY = join(process.cwd(), 'data');
-
-async function ensureDataDirectory(): Promise<void> {
-  await fs.mkdir(DATA_DIRECTORY, { recursive: true });
-}
-
-async function readLocalJson<T>(filename: string, fallback: T): Promise<T> {
-  await ensureDataDirectory();
-  const filePath = join(DATA_DIRECTORY, filename);
-
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    if (!content.trim()) return fallback;
-
-    const parsed = JSON.parse(content) as unknown;
-    if (Array.isArray(parsed)) return parsed as T;
-
-    if (parsed && typeof parsed === 'object') {
-      const record = parsed as Record<string, unknown>;
-      if (Array.isArray(record.quotes)) return record.quotes as T;
-      if (Array.isArray(record.users)) return record.users as T;
-      if (Array.isArray(record.comments)) return record.comments as T;
-      if (Array.isArray(record.conversations)) return record.conversations as T;
-      if (Array.isArray(record.items)) return record.items as T;
-    }
-
-    return fallback;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
-    console.error(`readLocalJson failed for ${filename}:`, error);
-    return fallback;
-  }
-}
-
-async function writeLocalJson(filename: string, data: unknown): Promise<void> {
-  await ensureDataDirectory();
-  const filePath = join(DATA_DIRECTORY, filename);
-  await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-}
-
-async function getCloudJson<T>(filename: string, fallback: T): Promise<T> {
-  try {
-    const blob = await get(filename, {
-      access: 'private',
-      useCache: false,
-    });
-
-    if (!blob || blob.stream === null) {
-      throw new Error('Missing blob stream');
-    }
-
-    const response = new Response(blob.stream, {
-      headers: {
-        'Cache-Control': 'no-store',
-        Pragma: 'no-cache',
-        Expires: '0',
-      },
-    });
-
-    const parsed = await response.json();
-    if (Array.isArray(parsed)) return parsed as T;
-    if (parsed && typeof parsed === 'object') {
-      const record = parsed as Record<string, unknown>;
-      if (Array.isArray(record.quotes)) return record.quotes as T;
-      if (Array.isArray(record.users)) return record.users as T;
-      if (Array.isArray(record.comments)) return record.comments as T;
-      if (Array.isArray(record.conversations)) return record.conversations as T;
-      if (Array.isArray(record.items)) return record.items as T;
-    }
-
-    return fallback;
-  } catch (error) {
-    console.error(`getCloudJson failed for ${filename}:`, error);
-    return readLocalJson<T>(filename, fallback);
-  }
-}
-
-async function saveCloudJson(filename: string, data: unknown): Promise<void> {
-  const jsonString = JSON.stringify(data, null, 2);
-  try {
-    await put(filename, jsonString, {
-      access: 'private',
-      allowOverwrite: true,
-      addRandomSuffix: false,
-    });
-  } catch (error) {
-    console.error(`saveCloudJson failed for ${filename}:`, error);
-  }
-
-  await writeLocalJson(filename, data);
-}
-
-async function getCloudQuotes(): Promise<Quote[]> {
-  return await getCloudJson<Quote[]>(QUOTES_BLOB_FILENAME, []);
-}
-
-async function saveCloudQuotes(quotes: Quote[]): Promise<void> {
-  await saveCloudJson(QUOTES_BLOB_FILENAME, quotes);
-}
-
-async function getCloudUsers(): Promise<User[]> {
-  return await getCloudJson<User[]>(USERS_BLOB_FILENAME, []);
-}
-
-async function saveCloudUsers(users: User[]): Promise<void> {
-  await saveCloudJson(USERS_BLOB_FILENAME, users);
-}
-
-async function getCloudComments(): Promise<Comment[]> {
-  return await getCloudJson<Comment[]>(COMMENTS_BLOB_FILENAME, []);
-}
-
-async function saveCloudComments(comments: Comment[]): Promise<void> {
-  await saveCloudJson(COMMENTS_BLOB_FILENAME, comments);
-}
-
-async function getCloudConversations(): Promise<Conversation[]> {
-  return await getCloudJson<Conversation[]>(CONVERSATIONS_BLOB_FILENAME, []);
-}
-
-async function saveCloudConversations(conversations: Conversation[]): Promise<void> {
-  await saveCloudJson(CONVERSATIONS_BLOB_FILENAME, conversations);
-}
 
 function hashPassword(password: string, salt: string): string {
   return pbkdf2Sync(password, salt, HASH_ITERATIONS, HASH_LENGTH, 'sha256').toString('hex');
@@ -261,74 +130,57 @@ function normalizeConversation(row: Record<string, unknown>): Conversation {
 
 export async function listQuotes(): Promise<Quote[]> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('quotes').select('*').order('scheduled_date', { ascending: true });
-    if (!error && Array.isArray(data)) {
-      return data.map((entry) => normalizeQuote(entry as Record<string, unknown>));
-    }
+  if (!client) return [];
+
+  const { data, error } = await client.from('quotes').select('*').order('scheduled_date', { ascending: true });
+  if (error) {
     console.error('Supabase quote list failed:', error);
+    return [];
   }
 
-  return await getCloudQuotes();
+  return Array.isArray(data) ? data.map((entry) => normalizeQuote(entry as Record<string, unknown>)) : [];
 }
 
 export async function createQuote(text: string, scheduledDate: string): Promise<Quote> {
   const client = getSupabaseClient();
-  if (client) {
-    const existingQuotes = await listQuotes();
-    const duplicate = existingQuotes.find((quote) => quote.scheduledDate === scheduledDate);
-    if (duplicate) {
-      throw new Error('DUPLICATE_DATE');
-    }
-
-    const nextId = existingQuotes.length > 0 ? Math.max(...existingQuotes.map((quote) => quote.id)) + 1 : 1;
-    const newQuote: Quote = { id: nextId, text, scheduledDate };
-    const { error } = await client.from('quotes').insert({
-      id: newQuote.id,
-      text: newQuote.text,
-      scheduled_date: newQuote.scheduledDate,
-      created_at: new Date().toISOString(),
-    });
-
-    if (!error) {
-      await client.from('comments').delete().neq('id', 0);
-      return newQuote;
-    }
-
-    console.error('Supabase quote insert failed:', error);
+  if (!client) {
+    throw new Error('Supabase is not configured');
   }
 
-  const quotes = await getCloudQuotes();
-  const duplicate = quotes.find((quote) => quote.scheduledDate === scheduledDate);
+  const existingQuotes = await listQuotes();
+  const duplicate = existingQuotes.find((quote) => quote.scheduledDate === scheduledDate);
   if (duplicate) {
     throw new Error('DUPLICATE_DATE');
   }
 
-  const nextId = quotes.length > 0 ? Math.max(...quotes.map((quote) => quote.id)) + 1 : 1;
+  const nextId = existingQuotes.length > 0 ? Math.max(...existingQuotes.map((quote) => quote.id)) + 1 : 1;
   const newQuote: Quote = { id: nextId, text, scheduledDate };
-  quotes.push(newQuote);
+  const { error } = await client.from('quotes').insert({
+    id: newQuote.id,
+    text: newQuote.text,
+    scheduled_date: newQuote.scheduledDate,
+    created_at: new Date().toISOString(),
+  });
 
-  await saveCloudQuotes(quotes);
-  await saveCloudComments([]);
+  if (error) {
+    console.error('Supabase quote insert failed:', error);
+    throw new Error(error.message || 'Could not save quote');
+  }
+
+  await client.from('comments').delete().neq('id', 0);
   return newQuote;
 }
 
 export async function deleteQuote(id: number): Promise<boolean> {
   const client = getSupabaseClient();
-  if (client) {
-    const { error } = await client.from('quotes').delete().eq('id', id);
-    if (!error) {
-      return true;
-    }
+  if (!client) return false;
+
+  const { error } = await client.from('quotes').delete().eq('id', id);
+  if (error) {
     console.error('Supabase quote delete failed:', error);
+    return false;
   }
 
-  const quotes = await getCloudQuotes();
-  const index = quotes.findIndex((quote) => quote.id === id);
-  if (index === -1) return false;
-
-  quotes.splice(index, 1);
-  await saveCloudQuotes(quotes);
   return true;
 }
 
@@ -349,48 +201,19 @@ export async function getLatestQuoteOnOrBefore(dateStr: string): Promise<Quote |
 export async function createUser(username: string, password: string): Promise<User> {
   const normalizedUsername = username.trim().toLowerCase();
   const client = getSupabaseClient();
-  if (client) {
-    const existingUser = await getUserByUsername(normalizedUsername);
-    if (existingUser) {
-      throw new Error('USERNAME_TAKEN');
-    }
-
-    const users = await listUsers();
-    const nextId = users.length > 0 ? Math.max(...users.map((user) => user.id)) + 1 : 1;
-    const salt = randomBytes(16).toString('hex');
-    const passwordHash = hashPassword(password, salt);
-    const user: User = {
-      id: nextId,
-      username: normalizedUsername,
-      passwordHash,
-      passwordSalt: salt,
-      createdAt: new Date().toISOString(),
-    };
-
-    const { error } = await client.from('app_users').insert({
-      id: user.id,
-      username: user.username,
-      password_hash: user.passwordHash,
-      password_salt: user.passwordSalt,
-      created_at: user.createdAt,
-    });
-
-    if (!error) {
-      return user;
-    }
-
-    console.error('Supabase user insert failed:', error);
+  if (!client) {
+    throw new Error('Supabase is not configured');
   }
 
-  const users = await getCloudUsers();
-  if (users.some((user) => user.username === normalizedUsername)) {
+  const existingUser = await getUserByUsername(normalizedUsername);
+  if (existingUser) {
     throw new Error('USERNAME_TAKEN');
   }
 
+  const users = await listUsers();
+  const nextId = users.length > 0 ? Math.max(...users.map((user) => user.id)) + 1 : 1;
   const salt = randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
-  const nextId = users.length > 0 ? Math.max(...users.map((user) => user.id)) + 1 : 1;
-
   const user: User = {
     id: nextId,
     username: normalizedUsername,
@@ -399,85 +222,74 @@ export async function createUser(username: string, password: string): Promise<Us
     createdAt: new Date().toISOString(),
   };
 
-  users.push(user);
-  await saveCloudUsers(users);
+  const { error } = await client.from('app_users').insert({
+    id: user.id,
+    username: user.username,
+    password_hash: user.passwordHash,
+    password_salt: user.passwordSalt,
+    created_at: user.createdAt,
+  });
+
+  if (error) {
+    console.error('Supabase user insert failed:', error);
+    throw new Error(error.message || 'Could not create user');
+  }
+
   return user;
 }
 
 export async function getUserByUsername(username: string): Promise<User | null> {
   const normalizedUsername = username.trim().toLowerCase();
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('app_users').select('*').eq('username', normalizedUsername).limit(1);
-    if (!error && Array.isArray(data) && data[0]) {
-      return normalizeUser(data[0] as Record<string, unknown>);
-    }
+  if (!client) return null;
+
+  const { data, error } = await client.from('app_users').select('*').eq('username', normalizedUsername).limit(1);
+  if (error) {
     console.error('Supabase user lookup failed:', error);
+    return null;
   }
 
-  const users = await getCloudUsers();
-  return users.find((user) => user.username === normalizedUsername) ?? null;
+  return Array.isArray(data) && data[0] ? normalizeUser(data[0] as Record<string, unknown>) : null;
 }
 
 export async function getUserById(id: number): Promise<User | null> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('app_users').select('*').eq('id', id).limit(1);
-    if (!error && Array.isArray(data) && data[0]) {
-      return normalizeUser(data[0] as Record<string, unknown>);
-    }
+  if (!client) return null;
+
+  const { data, error } = await client.from('app_users').select('*').eq('id', id).limit(1);
+  if (error) {
     console.error('Supabase user lookup failed:', error);
+    return null;
   }
 
-  const users = await getCloudUsers();
-  return users.find((user) => user.id === id) ?? null;
+  return Array.isArray(data) && data[0] ? normalizeUser(data[0] as Record<string, unknown>) : null;
 }
 
 export async function listUsers(): Promise<User[]> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('app_users').select('*').order('created_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return data.map((entry) => normalizeUser(entry as Record<string, unknown>));
-    }
+  if (!client) return [];
+
+  const { data, error } = await client.from('app_users').select('*').order('created_at', { ascending: false });
+  if (error) {
     console.error('Supabase user list failed:', error);
+    return [];
   }
 
-  const users = await getCloudUsers();
-  return users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return Array.isArray(data) ? data.map((entry) => normalizeUser(entry as Record<string, unknown>)) : [];
 }
 
 export async function deleteUser(id: number): Promise<boolean> {
   const client = getSupabaseClient();
-  if (client) {
-    const { error } = await client.from('app_users').delete().eq('id', id);
-    if (!error) {
-      await client.from('conversations').delete().eq('user_id', id);
-      await client.from('comments').delete().eq('user_id', id);
-      return true;
-    }
+  if (!client) return false;
+
+  const { error } = await client.from('app_users').delete().eq('id', id);
+  if (error) {
     console.error('Supabase user delete failed:', error);
+    return false;
   }
 
-  const users = await getCloudUsers();
-  const index = users.findIndex((user) => user.id === id);
-  if (index === -1) return false;
-
-  users.splice(index, 1);
-  await saveCloudUsers(users);
-
-  const conversations = await getCloudConversations();
-  const filteredConversations = conversations.filter((conversation) => conversation.userId !== id);
-  if (filteredConversations.length !== conversations.length) {
-    await saveCloudConversations(filteredConversations);
-  }
-
-  const comments = await getCloudComments();
-  const filteredComments = comments.filter((comment) => comment.userId !== id);
-  if (filteredComments.length !== comments.length) {
-    await saveCloudComments(filteredComments);
-  }
-
+  await client.from('conversations').delete().eq('user_id', id);
+  await client.from('comments').delete().eq('user_id', id);
   return true;
 }
 
@@ -494,87 +306,66 @@ export async function verifyUserPassword(userId: number, password: string): Prom
 
 export async function getOrCreateConversation(userId: number, username: string): Promise<Conversation> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
-    if (!error && Array.isArray(data) && data[0]) {
-      return normalizeConversation(data[0] as Record<string, unknown>);
-    }
-    if (error) {
-      console.error('Supabase conversation lookup failed:', error);
-    }
-
-    const nextId = (await listConversations()).length + 1;
-    const conversation: Conversation = {
-      id: nextId,
-      userId,
-      username,
-      createdAt: new Date().toISOString(),
-      messages: [],
-    };
-
-    const { error: insertError } = await client.from('conversations').insert({
-      id: conversation.id,
-      user_id: conversation.userId,
-      username: conversation.username,
-      created_at: conversation.createdAt,
-      messages: [],
-    });
-
-    if (!insertError) {
-      return conversation;
-    }
-
-    console.error('Supabase conversation insert failed:', insertError);
+  if (!client) {
+    return { id: 0, userId, username, createdAt: new Date().toISOString(), messages: [] };
   }
 
-  const conversations = await getCloudConversations();
-  const existing = conversations.find((conversation) => conversation.userId === userId);
-  if (existing) return existing;
+  const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
+  if (!error && Array.isArray(data) && data[0]) {
+    return normalizeConversation(data[0] as Record<string, unknown>);
+  }
 
-  const nextId = conversations.length > 0 ? Math.max(...conversations.map((item) => item.id)) + 1 : 1;
+  if (error) {
+    console.error('Supabase conversation lookup failed:', error);
+  }
+
   const conversation: Conversation = {
-    id: nextId,
+    id: Date.now(),
     userId,
     username,
     createdAt: new Date().toISOString(),
     messages: [],
   };
 
-  conversations.push(conversation);
-  await saveCloudConversations(conversations);
+  const { error: insertError } = await client.from('conversations').insert({
+    id: conversation.id,
+    user_id: conversation.userId,
+    username: conversation.username,
+    created_at: conversation.createdAt,
+    messages: [],
+  });
+
+  if (insertError) {
+    console.error('Supabase conversation insert failed:', insertError);
+  }
+
   return conversation;
 }
 
 export async function getConversationByUserId(userId: number): Promise<Conversation | null> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
-    if (!error && Array.isArray(data) && data[0]) {
-      return normalizeConversation(data[0] as Record<string, unknown>);
-    }
+  if (!client) return null;
+
+  const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
+  if (error) {
     console.error('Supabase conversation lookup failed:', error);
+    return null;
   }
 
-  const conversations = await getCloudConversations();
-  return conversations.find((conversation) => conversation.userId === userId) ?? null;
+  return Array.isArray(data) && data[0] ? normalizeConversation(data[0] as Record<string, unknown>) : null;
 }
 
 export async function listConversations(): Promise<Conversation[]> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('conversations').select('*').order('created_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return data.map((entry) => normalizeConversation(entry as Record<string, unknown>));
-    }
+  if (!client) return [];
+
+  const { data, error } = await client.from('conversations').select('*').order('created_at', { ascending: false });
+  if (error) {
     console.error('Supabase conversation list failed:', error);
+    return [];
   }
 
-  const conversations = await getCloudConversations();
-  return conversations.sort((a, b) => {
-    const aTime = a.messages[a.messages.length - 1]?.createdAt ?? a.createdAt;
-    const bTime = b.messages[b.messages.length - 1]?.createdAt ?? b.createdAt;
-    return new Date(bTime).getTime() - new Date(aTime).getTime();
-  });
+  return Array.isArray(data) ? data.map((entry) => normalizeConversation(entry as Record<string, unknown>)) : [];
 }
 
 export async function sendMessageToConversation(
@@ -584,41 +375,18 @@ export async function sendMessageToConversation(
   userId?: number,
 ): Promise<ChatMessage> {
   const client = getSupabaseClient();
-  if (client) {
-    const conversationResult = await client.from('conversations').select('*').eq('id', conversationId).limit(1);
-    const existingConversation = conversationResult.data?.[0] as Record<string, unknown> | undefined;
-    if (!existingConversation) {
-      throw new Error('CONVERSATION_NOT_FOUND');
-    }
-
-    const messages = Array.isArray(existingConversation.messages) ? (existingConversation.messages as unknown[]) : [];
-    const nextId = messages.length > 0 ? Math.max(...messages.map((item) => Number((item as Record<string, unknown>).id ?? 0))) + 1 : 1;
-    const chatMessage: ChatMessage = {
-      id: nextId,
-      sender,
-      userId,
-      message,
-      createdAt: new Date().toISOString(),
-    };
-
-    const { error } = await client.from('conversations').update({
-      messages: [...messages, chatMessage],
-    }).eq('id', conversationId);
-
-    if (!error) {
-      return chatMessage;
-    }
-
-    console.error('Supabase conversation update failed:', error);
+  if (!client) {
+    throw new Error('Supabase is not configured');
   }
 
-  const conversations = await getCloudConversations();
-  const conversation = conversations.find((item) => item.id === conversationId);
-  if (!conversation) {
+  const { data, error } = await client.from('conversations').select('*').eq('id', conversationId).limit(1);
+  if (error || !Array.isArray(data) || !data[0]) {
     throw new Error('CONVERSATION_NOT_FOUND');
   }
 
-  const nextId = conversation.messages.length > 0 ? Math.max(...conversation.messages.map((item) => item.id)) + 1 : 1;
+  const existingConversation = data[0] as Record<string, unknown>;
+  const messages = Array.isArray(existingConversation.messages) ? (existingConversation.messages as unknown[]) : [];
+  const nextId = messages.length > 0 ? Math.max(...messages.map((item) => Number((item as Record<string, unknown>).id ?? 0))) + 1 : 1;
   const chatMessage: ChatMessage = {
     id: nextId,
     sender,
@@ -627,27 +395,28 @@ export async function sendMessageToConversation(
     createdAt: new Date().toISOString(),
   };
 
-  conversation.messages.push(chatMessage);
-  await saveCloudConversations(conversations);
+  const { error: updateError } = await client.from('conversations').update({
+    messages: [...messages, chatMessage],
+  }).eq('id', conversationId);
+
+  if (updateError) {
+    console.error('Supabase conversation update failed:', updateError);
+    throw new Error(updateError.message || 'Could not save message');
+  }
+
   return chatMessage;
 }
 
 export async function clearConversationMessages(conversationId: number): Promise<boolean> {
   const client = getSupabaseClient();
-  if (client) {
-    const { error } = await client.from('conversations').update({ messages: [] }).eq('id', conversationId);
-    if (!error) {
-      return true;
-    }
+  if (!client) return false;
+
+  const { error } = await client.from('conversations').update({ messages: [] }).eq('id', conversationId);
+  if (error) {
     console.error('Supabase conversation clear failed:', error);
+    return false;
   }
 
-  const conversations = await getCloudConversations();
-  const conversation = conversations.find((item) => item.id === conversationId);
-  if (!conversation) return false;
-
-  conversation.messages = [];
-  await saveCloudConversations(conversations);
   return true;
 }
 
@@ -659,41 +428,12 @@ export async function createComment(
   userName: string,
 ): Promise<Comment> {
   const client = getSupabaseClient();
-  if (client) {
-    const comments = await listAllComments();
-    const nextId = comments.length > 0 ? Math.max(...comments.map((comment) => comment.id)) + 1 : 1;
-    const comment: Comment = {
-      id: nextId,
-      quoteId,
-      userId,
-      userName: isAnonymous ? 'Anonymous' : userName,
-      message,
-      isAnonymous,
-      createdAt: new Date().toISOString(),
-      replies: [],
-    };
-
-    const { error } = await client.from('comments').insert({
-      id: comment.id,
-      quote_id: comment.quoteId,
-      user_id: comment.userId,
-      user_name: comment.userName,
-      message: comment.message,
-      is_anonymous: comment.isAnonymous,
-      created_at: comment.createdAt,
-      replies: [],
-    });
-
-    if (!error) {
-      return comment;
-    }
-
-    console.error('Supabase comment insert failed:', error);
+  if (!client) {
+    throw new Error('Supabase is not configured');
   }
 
-  const comments = await getCloudComments();
+  const comments = await listAllComments();
   const nextId = comments.length > 0 ? Math.max(...comments.map((comment) => comment.id)) + 1 : 1;
-
   const comment: Comment = {
     id: nextId,
     quoteId,
@@ -705,39 +445,49 @@ export async function createComment(
     replies: [],
   };
 
-  comments.push(comment);
-  await saveCloudComments(comments);
+  const { error } = await client.from('comments').insert({
+    id: comment.id,
+    quote_id: comment.quoteId,
+    user_id: comment.userId,
+    user_name: comment.userName,
+    message: comment.message,
+    is_anonymous: comment.isAnonymous,
+    created_at: comment.createdAt,
+    replies: [],
+  });
+
+  if (error) {
+    console.error('Supabase comment insert failed:', error);
+    throw new Error(error.message || 'Could not save comment');
+  }
+
   return comment;
 }
 
 export async function listCommentsForQuote(quoteId: number): Promise<Comment[]> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('comments').select('*').eq('quote_id', quoteId).order('created_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return data.map((entry) => normalizeComment(entry as Record<string, unknown>));
-    }
+  if (!client) return [];
+
+  const { data, error } = await client.from('comments').select('*').eq('quote_id', quoteId).order('created_at', { ascending: false });
+  if (error) {
     console.error('Supabase comment list failed:', error);
+    return [];
   }
 
-  const comments = await getCloudComments();
-  return comments
-    .filter((comment) => comment.quoteId === quoteId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return Array.isArray(data) ? data.map((entry) => normalizeComment(entry as Record<string, unknown>)) : [];
 }
 
 export async function listAllComments(): Promise<Comment[]> {
   const client = getSupabaseClient();
-  if (client) {
-    const { data, error } = await client.from('comments').select('*').order('created_at', { ascending: false });
-    if (!error && Array.isArray(data)) {
-      return data.map((entry) => normalizeComment(entry as Record<string, unknown>));
-    }
+  if (!client) return [];
+
+  const { data, error } = await client.from('comments').select('*').order('created_at', { ascending: false });
+  if (error) {
     console.error('Supabase comment list failed:', error);
+    return [];
   }
 
-  const comments = await getCloudComments();
-  return comments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return Array.isArray(data) ? data.map((entry) => normalizeComment(entry as Record<string, unknown>)) : [];
 }
 
 function addReplyToThread(replies: CommentReply[], targetReplyId: number, incomingReply: CommentReply): boolean {
@@ -779,45 +529,12 @@ export async function createReply(
   targetName?: string,
 ): Promise<CommentReply> {
   const client = getSupabaseClient();
-  if (client) {
-    const existingComments = await listAllComments();
-    const comment = existingComments.find((item) => item.id === commentId);
-    if (!comment) {
-      throw new Error('COMMENT_NOT_FOUND');
-    }
-
-    const nextReplyId = getMaxReplyId(comment.replies) + 1;
-    const resolvedTargetName = targetName || (typeof parentReplyId === 'number' && parentReplyId > 0 ? undefined : comment.userName);
-    const reply: CommentReply = {
-      id: nextReplyId,
-      message,
-      createdAt: new Date().toISOString(),
-      author,
-      authorName,
-      targetName: resolvedTargetName,
-      replies: [],
-    };
-
-    const updatedReplies = [...comment.replies];
-    if (typeof parentReplyId === 'number' && parentReplyId > 0) {
-      const added = addReplyToThread(updatedReplies, parentReplyId, reply);
-      if (!added) {
-        throw new Error('REPLY_NOT_FOUND');
-      }
-    } else {
-      updatedReplies.push(reply);
-    }
-
-    const { error } = await client.from('comments').update({ replies: updatedReplies }).eq('id', commentId);
-    if (!error) {
-      return reply;
-    }
-
-    console.error('Supabase reply insert failed:', error);
+  if (!client) {
+    throw new Error('Supabase is not configured');
   }
 
-  const comments = await getCloudComments();
-  const comment = comments.find((item) => item.id === commentId);
+  const existingComments = await listAllComments();
+  const comment = existingComments.find((item) => item.id === commentId);
   if (!comment) {
     throw new Error('COMMENT_NOT_FOUND');
   }
@@ -834,34 +551,34 @@ export async function createReply(
     replies: [],
   };
 
+  const updatedReplies = [...comment.replies];
   if (typeof parentReplyId === 'number' && parentReplyId > 0) {
-    const added = addReplyToThread(comment.replies, parentReplyId, reply);
+    const added = addReplyToThread(updatedReplies, parentReplyId, reply);
     if (!added) {
       throw new Error('REPLY_NOT_FOUND');
     }
   } else {
-    comment.replies.push(reply);
+    updatedReplies.push(reply);
   }
 
-  await saveCloudComments(comments);
+  const { error } = await client.from('comments').update({ replies: updatedReplies }).eq('id', commentId);
+  if (error) {
+    console.error('Supabase reply insert failed:', error);
+    throw new Error(error.message || 'Could not save reply');
+  }
+
   return reply;
 }
 
 export async function deleteComment(commentId: number): Promise<boolean> {
   const client = getSupabaseClient();
-  if (client) {
-    const { error } = await client.from('comments').delete().eq('id', commentId);
-    if (!error) {
-      return true;
-    }
+  if (!client) return false;
+
+  const { error } = await client.from('comments').delete().eq('id', commentId);
+  if (error) {
     console.error('Supabase comment delete failed:', error);
+    return false;
   }
 
-  const comments = await getCloudComments();
-  const index = comments.findIndex((comment) => comment.id === commentId);
-  if (index === -1) return false;
-
-  comments.splice(index, 1);
-  await saveCloudComments(comments);
   return true;
 }
