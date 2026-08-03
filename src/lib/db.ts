@@ -128,6 +128,28 @@ function normalizeConversation(row: Record<string, unknown>): Conversation {
   };
 }
 
+function normalizePrivateMessage(row: Record<string, unknown>): ChatMessage {
+  return {
+    id: Number(row.id ?? 0),
+    sender: String(row.sender ?? 'user') === 'ag' ? 'ag' : 'user',
+    userId: typeof row.user_id === 'number' ? row.user_id : (typeof row.userId === 'number' ? row.userId : undefined),
+    message: String(row.message ?? ''),
+    createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
+  };
+}
+
+async function getPrivateMessagesForConversation(client: ReturnType<typeof getSupabaseClient>, conversationId: number): Promise<ChatMessage[]> {
+  if (!client) return [];
+
+  const { data, error } = await client.from('private_messages').select('*').eq('conversation_id', conversationId).order('created_at', { ascending: true });
+  if (error) {
+    console.error('Supabase private message fetch failed:', error);
+    return [];
+  }
+
+  return Array.isArray(data) ? data.map((entry) => normalizePrivateMessage(entry as Record<string, unknown>)) : [];
+}
+
 export async function listQuotes(): Promise<Quote[]> {
   const client = getSupabaseClient();
   if (!client) return [];
@@ -269,13 +291,70 @@ export async function listUsers(): Promise<User[]> {
   const client = getSupabaseClient();
   if (!client) return [];
 
-  const { data, error } = await client.from('app_users').select('*').order('created_at', { ascending: false });
-  if (error) {
-    console.error('Supabase user list failed:', error);
-    return [];
+  const [usersResult, conversationsResult, commentsResult] = await Promise.all([
+    client.from('app_users').select('*').order('created_at', { ascending: false }),
+    client.from('conversations').select('*').order('created_at', { ascending: false }),
+    client.from('comments').select('*').order('created_at', { ascending: false }),
+  ]);
+
+  const users: User[] = [];
+  const seenIds = new Set<number>();
+
+  if (!usersResult.error && Array.isArray(usersResult.data)) {
+    usersResult.data.forEach((entry) => {
+      const user = normalizeUser(entry as Record<string, unknown>);
+      if (user.id > 0) {
+        users.push(user);
+        seenIds.add(user.id);
+      }
+    });
+  } else if (usersResult.error) {
+    console.error('Supabase user list failed:', usersResult.error);
   }
 
-  return Array.isArray(data) ? data.map((entry) => normalizeUser(entry as Record<string, unknown>)) : [];
+  if (!conversationsResult.error && Array.isArray(conversationsResult.data)) {
+    conversationsResult.data.forEach((entry) => {
+      const conversation = entry as Record<string, unknown>;
+      const userId = Number(conversation.user_id ?? conversation.userId ?? 0);
+      const username = String(conversation.username ?? 'User');
+      const createdAt = String(conversation.created_at ?? conversation.createdAt ?? new Date().toISOString());
+      if (userId > 0 && !seenIds.has(userId)) {
+        users.push({
+          id: userId,
+          username,
+          passwordHash: '',
+          passwordSalt: '',
+          createdAt,
+        });
+        seenIds.add(userId);
+      }
+    });
+  } else if (conversationsResult.error) {
+    console.error('Supabase conversation user list failed:', conversationsResult.error);
+  }
+
+  if (!commentsResult.error && Array.isArray(commentsResult.data)) {
+    commentsResult.data.forEach((entry) => {
+      const comment = entry as Record<string, unknown>;
+      const userId = Number(comment.user_id ?? comment.userId ?? 0);
+      const username = String(comment.user_name ?? comment.userName ?? 'User');
+      const createdAt = String(comment.created_at ?? comment.createdAt ?? new Date().toISOString());
+      if (userId > 0 && !seenIds.has(userId)) {
+        users.push({
+          id: userId,
+          username,
+          passwordHash: '',
+          passwordSalt: '',
+          createdAt,
+        });
+        seenIds.add(userId);
+      }
+    });
+  } else if (commentsResult.error) {
+    console.error('Supabase comment user list failed:', commentsResult.error);
+  }
+
+  return users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function deleteUser(id: number): Promise<boolean> {
@@ -312,7 +391,9 @@ export async function getOrCreateConversation(userId: number, username: string):
 
   const { data, error } = await client.from('conversations').select('*').eq('user_id', userId).limit(1);
   if (!error && Array.isArray(data) && data[0]) {
-    return normalizeConversation(data[0] as Record<string, unknown>);
+    const conversation = normalizeConversation(data[0] as Record<string, unknown>);
+    conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+    return conversation;
   }
 
   if (error) {
@@ -352,7 +433,11 @@ export async function getConversationByUserId(userId: number): Promise<Conversat
     return null;
   }
 
-  return Array.isArray(data) && data[0] ? normalizeConversation(data[0] as Record<string, unknown>) : null;
+  if (!Array.isArray(data) || !data[0]) return null;
+
+  const conversation = normalizeConversation(data[0] as Record<string, unknown>);
+  conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+  return conversation;
 }
 
 export async function listConversations(): Promise<Conversation[]> {
@@ -365,7 +450,19 @@ export async function listConversations(): Promise<Conversation[]> {
     return [];
   }
 
-  return Array.isArray(data) ? data.map((entry) => normalizeConversation(entry as Record<string, unknown>)) : [];
+  if (!Array.isArray(data)) return [];
+
+  const conversations = await Promise.all(data.map(async (entry) => {
+    const conversation = normalizeConversation(entry as Record<string, unknown>);
+    conversation.messages = await getPrivateMessagesForConversation(client, conversation.id);
+    return conversation;
+  }));
+
+  return conversations.sort((a, b) => {
+    const aTime = a.messages[a.messages.length - 1]?.createdAt ?? a.createdAt;
+    const bTime = b.messages[b.messages.length - 1]?.createdAt ?? b.createdAt;
+    return new Date(bTime).getTime() - new Date(aTime).getTime();
+  });
 }
 
 export async function sendMessageToConversation(
@@ -385,8 +482,8 @@ export async function sendMessageToConversation(
   }
 
   const existingConversation = data[0] as Record<string, unknown>;
-  const messages = Array.isArray(existingConversation.messages) ? (existingConversation.messages as unknown[]) : [];
-  const nextId = messages.length > 0 ? Math.max(...messages.map((item) => Number((item as Record<string, unknown>).id ?? 0))) + 1 : 1;
+  const existingMessages = Array.isArray(existingConversation.messages) ? (existingConversation.messages as unknown[]) : [];
+  const nextId = existingMessages.length > 0 ? Math.max(...existingMessages.map((item) => Number((item as Record<string, unknown>).id ?? 0))) + 1 : 1;
   const chatMessage: ChatMessage = {
     id: nextId,
     sender,
@@ -395,13 +492,25 @@ export async function sendMessageToConversation(
     createdAt: new Date().toISOString(),
   };
 
+  const { error: insertError } = await client.from('private_messages').insert({
+    conversation_id: conversationId,
+    sender: chatMessage.sender,
+    user_id: chatMessage.userId ?? null,
+    message: chatMessage.message,
+    created_at: chatMessage.createdAt,
+  });
+
+  if (insertError) {
+    console.error('Supabase private message insert failed:', insertError);
+    throw new Error(insertError.message || 'Could not save message');
+  }
+
   const { error: updateError } = await client.from('conversations').update({
-    messages: [...messages, chatMessage],
+    messages: [...existingMessages, chatMessage],
   }).eq('id', conversationId);
 
   if (updateError) {
     console.error('Supabase conversation update failed:', updateError);
-    throw new Error(updateError.message || 'Could not save message');
   }
 
   return chatMessage;
@@ -410,6 +519,12 @@ export async function sendMessageToConversation(
 export async function clearConversationMessages(conversationId: number): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
+
+  const { error: deleteError } = await client.from('private_messages').delete().eq('conversation_id', conversationId);
+  if (deleteError) {
+    console.error('Supabase private message clear failed:', deleteError);
+    return false;
+  }
 
   const { error } = await client.from('conversations').update({ messages: [] }).eq('id', conversationId);
   if (error) {
