@@ -48,8 +48,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const cookie = request.headers.get("cookie");
   const session = await getUserSession(cookie);
+  const adminCheck = await requireAdmin(cookie);
+  const isAdmin = !adminCheck;
 
-  if (!session) {
+  if (!session && !isAdmin) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -74,10 +76,10 @@ export async function POST(request: NextRequest) {
 
   const comment = await createComment(
     quoteId,
-    session.id,
+    session?.id ?? 0,
     message,
     isAnonymous,
-    session.username,
+    isAdmin ? 'AG' : (session?.username ?? 'User'),
   );
 
   return Response.json({ comment }, { status: 201 });

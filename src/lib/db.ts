@@ -1,4 +1,6 @@
 import { randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { put, get } from '@vercel/blob';
 
 // The interface structure for your website's quotes
@@ -59,6 +61,45 @@ const COMMENTS_BLOB_FILENAME = 'comments.json';
 const CONVERSATIONS_BLOB_FILENAME = 'conversations.json';
 const HASH_ITERATIONS = 310000;
 const HASH_LENGTH = 32;
+const DATA_DIRECTORY = join(process.cwd(), 'data');
+
+async function ensureDataDirectory(): Promise<void> {
+  await fs.mkdir(DATA_DIRECTORY, { recursive: true });
+}
+
+async function readLocalJson<T>(filename: string, fallback: T): Promise<T> {
+  await ensureDataDirectory();
+  const filePath = join(DATA_DIRECTORY, filename);
+
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    if (!content.trim()) return fallback;
+
+    const parsed = JSON.parse(content) as unknown;
+    if (Array.isArray(parsed)) return parsed as T;
+
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as Record<string, unknown>;
+      if (Array.isArray(record.quotes)) return record.quotes as T;
+      if (Array.isArray(record.users)) return record.users as T;
+      if (Array.isArray(record.comments)) return record.comments as T;
+      if (Array.isArray(record.conversations)) return record.conversations as T;
+      if (Array.isArray(record.items)) return record.items as T;
+    }
+
+    return fallback;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
+    console.error(`readLocalJson failed for ${filename}:`, error);
+    return fallback;
+  }
+}
+
+async function writeLocalJson(filename: string, data: unknown): Promise<void> {
+  await ensureDataDirectory();
+  const filePath = join(DATA_DIRECTORY, filename);
+  await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+}
 
 async function getCloudJson<T>(filename: string, fallback: T): Promise<T> {
   try {
@@ -68,7 +109,7 @@ async function getCloudJson<T>(filename: string, fallback: T): Promise<T> {
     });
 
     if (!blob || blob.stream === null) {
-      return fallback;
+      throw new Error('Missing blob stream');
     }
 
     const response = new Response(blob.stream, {
@@ -79,20 +120,37 @@ async function getCloudJson<T>(filename: string, fallback: T): Promise<T> {
       },
     });
 
-    return await response.json();
+    const parsed = await response.json();
+    if (Array.isArray(parsed)) return parsed as T;
+    if (parsed && typeof parsed === 'object') {
+      const record = parsed as Record<string, unknown>;
+      if (Array.isArray(record.quotes)) return record.quotes as T;
+      if (Array.isArray(record.users)) return record.users as T;
+      if (Array.isArray(record.comments)) return record.comments as T;
+      if (Array.isArray(record.conversations)) return record.conversations as T;
+      if (Array.isArray(record.items)) return record.items as T;
+    }
+
+    return fallback;
   } catch (error) {
     console.error(`getCloudJson failed for ${filename}:`, error);
-    return fallback;
+    return readLocalJson<T>(filename, fallback);
   }
 }
 
 async function saveCloudJson(filename: string, data: unknown): Promise<void> {
   const jsonString = JSON.stringify(data, null, 2);
-  await put(filename, jsonString, {
-    access: 'private',
-    allowOverwrite: true,
-    addRandomSuffix: false,
-  });
+  try {
+    await put(filename, jsonString, {
+      access: 'private',
+      allowOverwrite: true,
+      addRandomSuffix: false,
+    });
+  } catch (error) {
+    console.error(`saveCloudJson failed for ${filename}:`, error);
+  }
+
+  await writeLocalJson(filename, data);
 }
 
 // Fetch the quotes array directly from Vercel Blob, bypassing stale metadata and CDN caches
