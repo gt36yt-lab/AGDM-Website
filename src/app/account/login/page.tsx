@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -40,9 +41,15 @@ export default function AccountLoginPage() {
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.5fr_1fr]">
         <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200/15 text-[var(--text-muted)] shadow-[0_0_60px_rgba(255,255,255,0.08)]">
-              logo
-            </div>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200/15 shadow-[0_0_60px_rgba(255,255,255,0.08)]">
+            <Image
+              src="/images/logo.jpg"
+              alt="AG logo"
+              width={48}
+              height={48}
+              className="object-contain rounded-full"
+            />
+          </div>
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">AG Daily Motivation</p>
               <h1 className="mt-2 text-3xl font-[family-name:var(--font-serif)]">Sign In to access</h1>

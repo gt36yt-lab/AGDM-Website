@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -29,8 +30,14 @@ export default async function HomePage() {
     <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_28%),linear-gradient(180deg,#02021c_0%,#2a2744_38%,#6c6c91_100%)] px-4 text-[var(--text)]">
       <div className="mx-auto flex min-h-dvh max-w-6xl flex-col gap-10 py-10 sm:py-14">
         <header className="flex flex-col items-center gap-6 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200/15 text-[var(--text-muted)] shadow-[0_0_80px_rgba(255,255,255,0.08)]">
-            logo
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200/15 shadow-[0_0_80px_rgba(255,255,255,0.08)]">
+            <Image
+              src="/images/logo.jpg"
+              alt="AG logo"
+              width={64}
+              height={64}
+              className="object-contain rounded-full"
+            />
           </div>
           <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">
             AG Daily Motivation
