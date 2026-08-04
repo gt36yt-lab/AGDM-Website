@@ -141,6 +141,52 @@ export default function AccountLoginPage() {
           </div>
         </section>
       </div>
+
+      <section className="mx-auto mt-12 max-w-6xl rounded-[2rem] border border-white/10 bg-white/5 p-10 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+        <div className="grid gap-10 lg:grid-cols-[0.9fr_0.9fr]">
+          <div className="rounded-[2rem] bg-[rgba(255,255,255,0.06)] p-10 text-center shadow-inner shadow-black/10">
+            <p className="text-sm uppercase tracking-[0.35em] text-[var(--text-muted)]">A good day starts with a positive attitude</p>
+            <h2 className="mt-8 text-4xl font-[family-name:var(--font-serif)] leading-tight sm:text-5xl">
+              A GOOD DAY STARTS WITH A POSITIVE ATTITUDE
+            </h2>
+          </div>
+
+          <div className="space-y-8 text-sm text-[var(--text-muted)]">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-[var(--accent-soft)]">Ali&apos;s Place</p>
+              <p className="mt-4 leading-relaxed text-[var(--text)]">
+                What began as a simple coding project evolved into a personal sanctuary for daily inspiration. I once stumbled upon a quote William Hazlitt wrote. It said, “A gentle word, a kind look, a good-natured smile can work wonders and accomplish miracles.” That idea stayed with me. I created this space to ground myself with daily words to live by, and to offer a gentle pause for anyone else who might need it. Welcome to my little corner of motivation. I hope it brightens your day as much as it does mine.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-[var(--accent-soft)]">My Socials</p>
+              <ul className="mt-4 space-y-3 text-sm">
+                <li>
+                  <a href="https://www.tiktok.com/@gt36yt" target="_blank" rel="noreferrer" className="text-[var(--text)] hover:text-[var(--accent-soft)]">
+                    TikTok · https://www.tiktok.com/@gt36yt
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.facebook.com/ali.rabaya.940/" target="_blank" rel="noreferrer" className="text-[var(--text)] hover:text-[var(--accent-soft)]">
+                    Facebook · https://www.facebook.com/ali.rabaya.940/
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.instagram.com/alirabaya123" target="_blank" rel="noreferrer" className="text-[var(--text)] hover:text-[var(--accent-soft)]">
+                    Instagram · https://www.instagram.com/alirabaya123
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/gt36yt-lab" target="_blank" rel="noreferrer" className="text-[var(--text)] hover:text-[var(--accent-soft)]">
+                    GitHub · https://github.com/gt36yt-lab
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
