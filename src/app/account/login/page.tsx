@@ -9,6 +9,7 @@ export default function AccountLoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,27 +38,26 @@ export default function AccountLoginPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_28%),linear-gradient(180deg,#02021c_0%,#2a2744_38%,#6c6c91_100%)] px-4 py-10 text-[var(--text)]">
+    <main className="min-h-dvh bg-[linear-gradient(180deg,#060721_0%,#111e4d_26%,#5b6e9e_62%,#eff2f8_100%)] px-4 py-10 text-[var(--text)]">
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.5fr_1fr]">
         <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-200/15 shadow-[0_0_60px_rgba(255,255,255,0.08)]">
-            <Image
-              src="/images/logo.jpg"
-              alt="AG logo"
-              width={48}
-              height={48}
-              className="object-contain rounded-full"
-            />
-          </div>
+              <Image
+                src="/images/logo.jpg"
+                alt="AG logo"
+                width={48}
+                height={48}
+                className="object-contain rounded-full"
+              />
+            </div>
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">AG Daily Motivation</p>
               <h1 className="mt-2 text-3xl font-[family-name:var(--font-serif)]">Sign In to access</h1>
             </div>
           </div>
           <div className="mt-10 space-y-4 text-sm text-[var(--text-muted)]">
-            <p>Create your own account with a username and password. No gmail required.</p>
-            <p>Use the fields on the right to sign in or create an account.</p>
+            <p>Sign into the website to interact with AG publicly and privately and to also view the quote of the day. No Gmail is required.</p>
           </div>
           <div className="mt-10 rounded-[1.75rem] border border-white/10 bg-white/5 p-6 shadow-inner shadow-black/10">
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Quick intro</p>
@@ -106,14 +106,23 @@ export default function AccountLoginPage() {
 
             <div>
               <label className="block text-sm uppercase tracking-[0.25em] text-[var(--text-muted)]">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-3 w-full rounded-3xl border border-white/10 bg-white/10 px-4 py-4 text-sm text-[var(--text)] outline-none ring-[var(--accent)] transition focus:ring-2"
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                required
-              />
+              <div className="mt-3 flex items-center gap-3 rounded-3xl border border-white/10 bg-white/10 px-4 py-4">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="flex-1 bg-transparent text-sm text-[var(--text)] outline-none"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="text-sm font-semibold text-[var(--text-muted)] transition hover:text-[var(--accent-soft)]"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-400">{error}</p>}
@@ -145,8 +154,7 @@ export default function AccountLoginPage() {
       <section className="mx-auto mt-12 max-w-6xl rounded-[2rem] border border-white/10 bg-white/5 p-10 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_0.9fr]">
           <div className="rounded-[2rem] bg-[rgba(255,255,255,0.06)] p-10 text-center shadow-inner shadow-black/10">
-            <p className="text-sm uppercase tracking-[0.35em] text-[var(--text-muted)]">A good day starts with a positive attitude</p>
-            <h2 className="mt-8 text-4xl font-[family-name:var(--font-serif)] leading-tight sm:text-5xl">
+            <h2 className="text-4xl font-[family-name:var(--font-serif)] leading-tight sm:text-5xl">
               A GOOD DAY STARTS WITH A POSITIVE ATTITUDE
             </h2>
           </div>
