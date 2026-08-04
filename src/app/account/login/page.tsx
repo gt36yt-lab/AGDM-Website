@@ -38,7 +38,7 @@ export default function AccountLoginPage() {
   }
 
   return (
-    <main className="min-h-dvh bg-[linear-gradient(180deg,#060721_0%,#111e4d_26%,#5b6e9e_62%,#eff2f8_100%)] px-4 py-10 text-[var(--text)]">
+    <main className="min-h-dvh bg-[linear-gradient(180deg,#050621_0%,#101d4f_26%,#305d87_62%,#496995_100%)] px-4 py-10 text-[var(--text)]">
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.5fr_1fr]">
         <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
           <div className="flex items-center gap-4">
@@ -62,9 +62,9 @@ export default function AccountLoginPage() {
           <div className="mt-10 rounded-[1.75rem] border border-white/10 bg-white/5 p-6 shadow-inner shadow-black/10">
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Quick intro</p>
             <ul className="mt-4 space-y-3 text-sm leading-relaxed text-[var(--text-muted)]">
-              <li>Daily quote view after login.</li>
-              <li>Chat with the community and message AG privately.</li>
-              <li>Create an account and keep your username.</li>
+              <li>💡 <strong>Your Daily Spark:</strong> Log in to see today&apos;s quote waiting for you.</li>
+              <li>📬 <strong>Open Line:</strong> Chat live with the community or shoot AG a private note.</li>
+              <li>🏷️ <strong>Claim Your Spot:</strong> Create an account to save your custom username.</li>
             </ul>
           </div>
         </section>
