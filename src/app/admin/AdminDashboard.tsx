@@ -275,7 +275,7 @@ export default function AdminDashboard() {
     });
 
   return (
-    <main className="min-h-dvh bg-[linear-gradient(180deg,#060721_0%,#111e4d_26%,#5b6e9e_62%,#eff2f8_100%)] px-4 py-10 text-[var(--text)]">
+    <main className="min-h-dvh bg-[linear-gradient(180deg,#050621_0%,#101d4f_26%,#385b8c_62%,#5a6f9f_100%)] px-4 py-10 text-[var(--text)]">
       <div className="mx-auto flex min-h-dvh max-w-6xl flex-col gap-10">
         <header className="flex flex-col gap-6 rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
           <div>

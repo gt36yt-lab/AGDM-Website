@@ -52,12 +52,12 @@ export default function AccountLoginPage() {
               />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">AG Daily Motivation</p>
-              <h1 className="mt-2 text-3xl font-[family-name:var(--font-serif)]">Sign In to access</h1>
+              <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)] [text-shadow:0px_1px_2px_rgba(0,0,0,0.25)]">AG Daily Motivation</p>
+              <h1 className="mt-2 text-3xl font-[family-name:var(--font-serif)] [text-shadow:0px_2px_4px_rgba(0,0,0,0.32)]">Sign in to access</h1>
             </div>
           </div>
-          <div className="mt-10 space-y-4 text-sm text-[var(--text-muted)]">
-            <p>Sign into the website to interact with AG publicly and privately and to also view the quote of the day. No Gmail is required.</p>
+          <div className="mt-10 space-y-4 text-sm text-[var(--text-muted)] [text-shadow:0px_1px_2px_rgba(0,0,0,0.22)]">
+            <p>Join a calm, daily motivation space built to help you start each morning with clarity. Sign in to view the quote of the day, join the community chat, and send private messages to AG — all while keeping your own username.</p>
           </div>
           <div className="mt-10 rounded-[1.75rem] border border-white/10 bg-white/5 p-6 shadow-inner shadow-black/10">
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Quick intro</p>

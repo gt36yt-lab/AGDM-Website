@@ -27,7 +27,7 @@ export default async function HomePage() {
   const displayDate = formatDisplayDate(today, tz);
 
   return (
-    <main className="min-h-dvh bg-[linear-gradient(180deg,#060721_0%,#111e4d_26%,#5b6e9e_62%,#eff2f8_100%)] px-4 text-[var(--text)]">
+    <main className="min-h-dvh bg-[linear-gradient(180deg,#050621_0%,#101d4f_26%,#305d87_62%,#496995_100%)] px-4 text-[var(--text)]">
       <div className="mx-auto flex min-h-dvh max-w-6xl flex-col gap-10 py-10 sm:py-14">
         <header className="flex flex-col items-center gap-10 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200/15 shadow-[0_0_80px_rgba(255,255,255,0.08)]">
