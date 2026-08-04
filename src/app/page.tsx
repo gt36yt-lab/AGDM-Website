@@ -29,7 +29,7 @@ export default async function HomePage() {
   return (
     <main className="min-h-dvh bg-[linear-gradient(180deg,#060721_0%,#111e4d_26%,#5b6e9e_62%,#eff2f8_100%)] px-4 text-[var(--text)]">
       <div className="mx-auto flex min-h-dvh max-w-6xl flex-col gap-10 py-10 sm:py-14">
-        <header className="flex flex-col items-center gap-6 text-center">
+        <header className="flex flex-col items-center gap-10 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200/15 shadow-[0_0_80px_rgba(255,255,255,0.08)]">
             <Image
               src="/images/logo.jpg"
@@ -42,27 +42,14 @@ export default async function HomePage() {
           <p className="text-xs uppercase tracking-[0.4em] text-[var(--text-muted)]">
             AG Daily Motivation
           </p>
-          <div className="space-y-1">
+          <div className="space-y-5">
             <p className="text-sm uppercase tracking-[0.2em] text-[var(--text-muted)]">{displayDate}</p>
-            <h1 className="text-5xl font-[family-name:var(--font-serif)] leading-[0.95] sm:text-6xl">
+            <h1 className="text-7xl font-[family-name:var(--font-serif)] leading-[0.92] sm:text-[5.5rem]">
               {quote?.text ?? "Life Goes On"}
             </h1>
+            <p className="text-sm text-[var(--text-muted)]">AG&apos;s Quote of the Day</p>
           </div>
-          <p className="text-sm text-[var(--text-muted)]">AG&apos;s Quote of the Day</p>
-          <p className="text-base italic text-[var(--accent-soft)]">With care, AG</p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <Link href="/profile" className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-[var(--text)] shadow-sm hover:bg-white/10">
-              Profile
-            </Link>
-            <form action="/api/auth/logout" method="post">
-              <button
-                type="submit"
-                className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-5 py-3 text-sm text-[var(--accent-soft)] transition hover:bg-[var(--accent)]/20"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
+          <p className="mt-4 text-base italic text-[var(--accent-soft)]">With care, AG</p>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.6fr)]">
@@ -87,6 +74,20 @@ export default async function HomePage() {
             </div>
             <CommentBox quoteId={quote?.id ?? 1} isSignedIn={Boolean(session || isAdmin)} />
           </section>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-4 pt-6">
+          <Link href="/profile" className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-[var(--text)] shadow-sm hover:bg-white/10">
+            Profile
+          </Link>
+          <form action="/api/auth/logout" method="post">
+            <button
+              type="submit"
+              className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-5 py-3 text-sm text-[var(--accent-soft)] transition hover:bg-[var(--accent)]/20"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </div>
     </main>
