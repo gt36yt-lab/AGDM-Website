@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
@@ -36,74 +37,87 @@ export default function AccountLoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="mb-2 font-[family-name:var(--font-serif)] text-3xl text-[var(--accent-soft)]">
-        {mode === "login" ? "Sign in" : "Create account"}
-      </h1>
-      <p className="mb-8 text-sm text-[var(--text-muted)]">
-        Create your own account with a username and password.
-      </p>
+    <main className="relative min-h-dvh overflow-hidden">
+      <Image
+        src="/images/login.png"
+        alt="Login page design"
+        fill
+        priority
+        className="object-cover"
+      />
+      <div className="absolute inset-0 bg-black/20" />
 
-      <div className="mb-6 flex rounded-lg border border-white/10 bg-white/5 p-1">
-        <button
-          type="button"
-          onClick={() => setMode("login")}
-          className={`flex-1 rounded-md px-3 py-2 text-sm transition ${mode === "login" ? "bg-[var(--accent)] text-[var(--bg-deep)]" : "text-[var(--text-muted)]"}`}
-        >
-          Sign in
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("signup")}
-          className={`flex-1 rounded-md px-3 py-2 text-sm transition ${mode === "signup" ? "bg-[var(--accent)] text-[var(--bg-deep)]" : "text-[var(--text-muted)]"}`}
-        >
-          Create account
-        </button>
-      </div>
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        <label className="block text-sm text-[var(--text-muted)]">
-          Username
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-[var(--text)] outline-none ring-[var(--accent)] focus:ring-2"
-            autoComplete="username"
-            required
-          />
-        </label>
-
-        <label className="block text-sm text-[var(--text-muted)]">
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-[var(--text)] outline-none ring-[var(--accent)] focus:ring-2"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            required
-          />
-        </label>
-
-        {error && (
-          <p className="text-sm text-red-400" role="alert">
-            {error}
+      <div className="relative z-10 mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
+        <div className="rounded-3xl border border-white/15 bg-[rgba(15,10,26,0.8)] p-8 shadow-2xl shadow-black/30 backdrop-blur-md">
+          <h1 className="mb-2 font-[family-name:var(--font-serif)] text-3xl text-[var(--accent-soft)]">
+            {mode === "login" ? "Sign in" : "Create account"}
+          </h1>
+          <p className="mb-8 text-sm text-[var(--text-muted)]">
+            Create your own account with a username and password.
           </p>
-        )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110 disabled:opacity-50"
-        >
-          {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
-        </button>
-      </form>
+          <div className="mb-6 flex rounded-lg border border-white/10 bg-white/5 p-1">
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className={`flex-1 rounded-md px-3 py-2 text-sm transition ${mode === "login" ? "bg-[var(--accent)] text-[var(--bg-deep)]" : "text-[var(--text-muted)]"}`}
+            >
+              Sign in
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className={`flex-1 rounded-md px-3 py-2 text-sm transition ${mode === "signup" ? "bg-[var(--accent)] text-[var(--bg-deep)]" : "text-[var(--text-muted)]"}`}
+            >
+              Create account
+            </button>
+          </div>
 
-      <Link href="/" className="mt-10 text-center text-sm text-[var(--text-muted)] hover:text-[var(--accent-soft)]">
-        ← Back to site
-      </Link>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <label className="block text-sm text-[var(--text-muted)]">
+              Username
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-[var(--text)] outline-none ring-[var(--accent)] focus:ring-2"
+                autoComplete="username"
+                required
+              />
+            </label>
+
+            <label className="block text-sm text-[var(--text-muted)]">
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-2 w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-[var(--text)] outline-none ring-[var(--accent)] focus:ring-2"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                required
+              />
+            </label>
+
+            {error && (
+              <p className="text-sm text-red-400" role="alert">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110 disabled:opacity-50"
+            >
+              {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
+            </button>
+          </form>
+
+          <Link href="/" className="mt-10 block text-center text-sm text-[var(--text-muted)] hover:text-[var(--accent-soft)]">
+            ← Back to site
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -275,218 +276,229 @@ export default function AdminDashboard() {
     });
 
   return (
-    <main className="mx-auto min-h-dvh max-w-2xl px-6 py-12">
-      <div className="mb-10 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-[family-name:var(--font-serif)] text-3xl text-[var(--accent-soft)]">
-            AG dashboard
-          </h1>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">
-            One quote per calendar day. Visitors see today&apos;s message on the
-            home page.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="shrink-0 text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
-        >
-          Log out
-        </button>
-      </div>
+    <main className="relative min-h-dvh overflow-hidden">
+      <Image
+        src="/images/admin-page.png"
+        alt="Admin dashboard design"
+        fill
+        priority
+        className="object-cover"
+      />
+      <div className="absolute inset-0 bg-black/15" />
 
-      <form
-        onSubmit={onAdd}
-        className="mb-12 space-y-4 rounded-xl border border-white/10 bg-white/5 p-6"
-      >
-        <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          New quote
-        </h2>
-        <label className="block text-sm text-[var(--text-muted)]">
-          Goes live on
-          <input
-            type="date"
-            value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            required
-          />
-        </label>
-        <label className="block text-sm text-[var(--text-muted)]">
-          Quote
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            placeholder="Write something that will lift someone today…"
-            className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            required
-          />
-        </label>
-
-        {error && (
-          <p className="text-sm text-red-400" role="alert">
-            {error}
-          </p>
-        )}
-        {message && <p className="text-sm text-emerald-400">{message}</p>}
-
-        <button
-          type="submit"
-          className="rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
-        >
-          Schedule
-        </button>
-      </form>
-
-      <section className="mb-12">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Upcoming &amp; past
-        </h2>
-        {loading ? (
-          <p className="text-sm text-[var(--text-muted)]">Loading…</p>
-        ) : quotes.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">
-            No quotes yet. Schedule your first one above.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {quotes.map((q) => (
-              <li
-                key={q.id}
-                className="flex gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-[var(--accent-soft)]">
-                    {q.scheduledDate}
-                  </p>
-                  <p className="mt-2 text-sm leading-relaxed text-[var(--text)]">
-                    {q.text}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onDelete(q.id)}
-                  className="shrink-0 self-start text-xs text-red-400/80 hover:text-red-400"
-                >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mb-12">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Public chat
-        </h2>
-
-        <form onSubmit={onSubmitChat} className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <textarea
-            value={chatMessage}
-            onChange={(e) => setChatMessage(e.target.value)}
-            rows={4}
-            placeholder="Write a public comment for the main page…"
-            className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-            required
-          />
-          <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-            <input
-              type="checkbox"
-              checked={chatAnonymous}
-              onChange={(e) => setChatAnonymous(e.target.checked)}
-            />
-            Post anonymously
-          </label>
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={chatLoading}
-              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110 disabled:opacity-50"
-            >
-              {chatLoading ? "Posting…" : "Post comment"}
-            </button>
-            {chatStatus && <p className="text-sm text-emerald-400">{chatStatus}</p>}
+      <div className="relative z-10 mx-auto min-h-dvh max-w-2xl px-6 py-12">
+        <div className="mb-10 flex items-start justify-between gap-4 rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
+          <div>
+            <h1 className="font-[family-name:var(--font-serif)] text-3xl text-[var(--accent-soft)]">
+              AG dashboard
+            </h1>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              One quote per calendar day. Visitors see today&apos;s message on the
+              home page.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="shrink-0 text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            Log out
+          </button>
+        </div>
+
+        <form
+          onSubmit={onAdd}
+          className="mb-12 space-y-4 rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md"
+        >
+          <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            New quote
+          </h2>
+          <label className="block text-sm text-[var(--text-muted)]">
+            Goes live on
+            <input
+              type="date"
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              required
+            />
+          </label>
+          <label className="block text-sm text-[var(--text-muted)]">
+            Quote
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder="Write something that will lift someone today…"
+              className="mt-2 w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              required
+            />
+          </label>
+
+          {error && (
+            <p className="text-sm text-red-400" role="alert">
+              {error}
+            </p>
+          )}
+          {message && <p className="text-sm text-emerald-400">{message}</p>}
+
+          <button
+            type="submit"
+            className="rounded-lg bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110"
+          >
+            Schedule
+          </button>
         </form>
 
-        {chatMessages.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No public messages yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {chatMessages.map((item) => (
-              <li key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-[var(--accent-soft)]">{item.authorLabel}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
-                    {item.id.startsWith("comment-") && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteComment(Number(item.id.replace("comment-", "")))}
-                        className="text-xs text-red-400 hover:text-red-300"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">
-                  {item.targetName ? (
-                    <>
-                      <span className="font-semibold text-[var(--accent-soft)]">@{item.targetName}</span>{" "}
-                      {renderMentionText(item.message)}
-                    </>
-                  ) : (
-                    renderMentionText(item.message)
-                  )}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mb-12">
-        <PrivateChat isAdmin={true} />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
-          Account users
-        </h2>
-        {users.length === 0 ? (
-          <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {users.map((user) => (
-              <li key={user.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--accent-soft)]">{user.username}</p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Joined {new Date(user.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onDeleteUser(user.id, user.username)}
-                  className="rounded-full border border-red-400/30 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-400 hover:bg-red-400/10"
+        <section className="mb-12 rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            Upcoming &amp; past
+          </h2>
+          {loading ? (
+            <p className="text-sm text-[var(--text-muted)]">Loading…</p>
+          ) : quotes.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">
+              No quotes yet. Schedule your first one above.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {quotes.map((q) => (
+                <li
+                  key={q.id}
+                  className="flex gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-4"
                 >
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-[var(--accent-soft)]">
+                      {q.scheduledDate}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed text-[var(--text)]">
+                      {q.text}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(q.id)}
+                    className="shrink-0 self-start text-xs text-red-400/80 hover:text-red-400"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
-      <Link
-        href="/"
-        className="mt-12 inline-block text-sm text-[var(--text-muted)] hover:text-[var(--accent-soft)]"
-      >
-        View public site →
-      </Link>
+        <section className="mb-12 rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            Public chat
+          </h2>
+
+          <form onSubmit={onSubmitChat} className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <textarea
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              rows={4}
+              placeholder="Write a public comment for the main page…"
+              className="w-full resize-y rounded-lg border border-white/10 bg-[var(--bg-deep)] px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              required
+            />
+            <label className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+              <input
+                type="checkbox"
+                checked={chatAnonymous}
+                onChange={(e) => setChatAnonymous(e.target.checked)}
+              />
+              Post anonymously
+            </label>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={chatLoading}
+                className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--bg-deep)] hover:brightness-110 disabled:opacity-50"
+              >
+                {chatLoading ? "Posting…" : "Post comment"}
+              </button>
+              {chatStatus && <p className="text-sm text-emerald-400">{chatStatus}</p>}
+            </div>
+          </form>
+
+          {chatMessages.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No public messages yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {chatMessages.map((item) => (
+                <li key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[var(--accent-soft)]">{item.authorLabel}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
+                      {item.id.startsWith("comment-") && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteComment(Number(item.id.replace("comment-", "")))}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">
+                    {item.targetName ? (
+                      <>
+                        <span className="font-semibold text-[var(--accent-soft)]">@{item.targetName}</span>{" "}
+                        {renderMentionText(item.message)}
+                      </>
+                    ) : (
+                      renderMentionText(item.message)
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="mb-12 rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
+          <PrivateChat isAdmin={true} />
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-[rgba(15,10,26,0.75)] p-6 shadow-2xl shadow-black/20 backdrop-blur-md">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            Account users
+          </h2>
+          {users.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {users.map((user) => (
+                <li key={user.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--accent-soft)]">{user.username}</p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Joined {new Date(user.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteUser(user.id, user.username)}
+                    className="rounded-full border border-red-400/30 px-3 py-1 text-xs uppercase tracking-[0.2em] text-red-400 hover:bg-red-400/10"
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <Link
+          href="/"
+          className="mt-12 inline-block text-sm text-[var(--text-muted)] hover:text-[var(--accent-soft)]"
+        >
+          View public site →
+        </Link>
+      </div>
     </main>
   );
 }
