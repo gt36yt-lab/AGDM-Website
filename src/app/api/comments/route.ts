@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { createComment, listAllComments, listCommentsForQuote } from "@/lib/db";
+import { createComment, enrichCommentsWithStreaks, listAllComments, listCommentsForQuote } from "@/lib/db";
 import { getUserSession, requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,9 @@ export async function GET(request: NextRequest) {
     if (denied) return denied;
 
     const comments = await listAllComments();
+    const { comments: withStreaks, streaks } = enrichCommentsWithStreaks(comments);
     return Response.json(
-      { comments },
+      { comments: withStreaks, streaks },
       {
         headers: {
           "Cache-Control": "no-store",
@@ -35,8 +36,9 @@ export async function GET(request: NextRequest) {
   }
 
   const comments = await listCommentsForQuote(quoteId);
+  const { comments: withStreaks } = enrichCommentsWithStreaks(comments);
   return Response.json(
-    { comments },
+    { comments: withStreaks },
     {
       headers: {
         "Cache-Control": "no-store",

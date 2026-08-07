@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
     isAdmin ? undefined : parentReplyId,
     authorName || (isAdmin ? "AG" : session?.username || undefined),
     targetName || undefined,
+    isAdmin ? undefined : session?.id,
+    isAdmin ? undefined : session?.username,
   );
 
   return Response.json({ reply });

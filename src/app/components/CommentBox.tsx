@@ -9,6 +9,9 @@ type CommentReply = {
   author: "ag" | "user";
   authorName?: string;
   targetName?: string;
+  userId?: number;
+  userName?: string;
+  streak?: number;
   replies?: CommentReply[];
 };
 
@@ -20,6 +23,7 @@ type Comment = {
   isAnonymous: boolean;
   createdAt: string;
   replies: CommentReply[];
+  streak?: number;
 };
 
 type CommentBoxProps = {
@@ -33,6 +37,7 @@ type ChatMessage = {
   createdAt: string;
   message: string;
   targetName?: string;
+  streak?: number;
 };
 
 type UserOption = {
@@ -180,6 +185,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
           createdAt: reply.createdAt,
           message: reply.message,
           targetName: reply.targetName,
+          streak: reply.streak,
         },
       ];
 
@@ -207,6 +213,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
           authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
           createdAt: comment.createdAt,
           message: comment.message,
+          streak: comment.streak,
         },
       ];
 
@@ -331,9 +338,16 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
           chatMessages.map((item) => (
             <div key={item.id} className="rounded-xl border border-white/10 bg-[var(--bg-deep)]/70 p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                  {item.authorLabel}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                    {item.authorLabel}
+                  </p>
+                  {typeof item.streak === "number" && item.streak > 0 && (
+                    <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                      🔥 {item.streak}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-[var(--text-muted)]">
                   {new Date(item.createdAt).toLocaleString()}
                 </p>

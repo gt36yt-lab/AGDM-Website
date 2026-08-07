@@ -22,6 +22,9 @@ export interface CommentReply {
   author: 'ag' | 'user';
   authorName?: string;
   targetName?: string;
+  userId?: number;
+  userName?: string;
+  streak?: number;
   replies?: CommentReply[];
 }
 
@@ -34,6 +37,16 @@ export interface Comment {
   isAnonymous: boolean;
   createdAt: string;
   replies: CommentReply[];
+  streak?: number;
+}
+
+export interface AccountStreakSummary {
+  key: string;
+  displayName: string;
+  userId?: number;
+  currentStreak: number;
+  bestStreak: number;
+  lastActiveDate: string;
 }
 
 export interface ChatMessage {
@@ -88,6 +101,9 @@ function normalizeReply(value: unknown): CommentReply {
     author: reply.author === 'user' ? 'user' : 'ag',
     authorName: typeof reply.authorName === 'string' ? reply.authorName : undefined,
     targetName: typeof reply.targetName === 'string' ? reply.targetName : undefined,
+    userId: typeof reply.userId === 'number' ? reply.userId : (typeof reply.user_id === 'number' ? reply.user_id : undefined),
+    userName: typeof reply.userName === 'string' ? reply.userName : (typeof reply.user_name === 'string' ? reply.user_name : undefined),
+    streak: typeof reply.streak === 'number' ? reply.streak : undefined,
     replies: nestedReplies,
   };
 }
@@ -103,7 +119,130 @@ function normalizeComment(row: Record<string, unknown>): Comment {
     isAnonymous: Boolean(row.is_anonymous ?? row.isAnonymous ?? false),
     createdAt: String(row.created_at ?? row.createdAt ?? new Date().toISOString()),
     replies: repliesValue.map(normalizeReply),
+    streak: typeof row.streak === 'number' ? row.streak : undefined,
   };
+}
+
+function toDateKey(value: string | Date): string {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  return date.toISOString().slice(0, 10);
+}
+
+function calculateStreaksForDates(dates: string[]): { currentStreak: number; bestStreak: number; lastActiveDate: string } {
+  const sortedDates = [...new Set(dates)].sort();
+  if (sortedDates.length === 0) {
+    return { currentStreak: 0, bestStreak: 0, lastActiveDate: '' };
+  }
+
+  let bestStreak = 1;
+  let currentStreak = 1;
+  let previousDate: Date | null = null;
+
+  for (const dateKey of sortedDates) {
+    const currentDate = new Date(`${dateKey}T12:00:00Z`);
+    if (!previousDate) {
+      previousDate = currentDate;
+      continue;
+    }
+
+    const diffDays = Math.round((currentDate.getTime() - previousDate.getTime()) / 86_400_000);
+    if (diffDays === 1) {
+      currentStreak += 1;
+      bestStreak = Math.max(bestStreak, currentStreak);
+    } else {
+      currentStreak = 1;
+    }
+
+    previousDate = currentDate;
+  }
+
+  let streakCursor = new Date();
+  let activeToday = 0;
+  while (sortedDates.includes(toDateKey(streakCursor))) {
+    activeToday += 1;
+    streakCursor = new Date(streakCursor.getTime() - 86_400_000);
+  }
+
+  return {
+    currentStreak: activeToday,
+    bestStreak,
+    lastActiveDate: sortedDates[sortedDates.length - 1] ?? '',
+  };
+}
+
+export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comment[]; streaks: AccountStreakSummary[] } {
+  const activityByAccount = new Map<string, { displayName: string; userId?: number; dates: Set<string> }>();
+
+  const registerActivity = (
+    entry: { createdAt: string; userId?: number; userName?: string; isAnonymous?: boolean },
+    fallbackName: string,
+  ) => {
+    if (entry.isAnonymous) return;
+
+    const normalizedName = entry.userName?.trim() || fallbackName;
+    const userId = typeof entry.userId === 'number' && entry.userId > 0 ? entry.userId : undefined;
+    const key = userId ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+    const existing = activityByAccount.get(key);
+    const nextEntry = existing ?? { displayName: normalizedName, userId, dates: new Set<string>() };
+    nextEntry.displayName = normalizedName;
+    nextEntry.userId = userId;
+    nextEntry.dates.add(toDateKey(entry.createdAt));
+    activityByAccount.set(key, nextEntry);
+  };
+
+  const walkComment = (comment: Comment) => {
+    registerActivity(comment, comment.userName || 'User');
+    comment.replies.forEach((reply) => {
+      registerActivity(reply, reply.authorName || reply.userName || 'User');
+      if (reply.replies && reply.replies.length > 0) {
+        reply.replies.forEach((nestedReply) => registerActivity(nestedReply, nestedReply.authorName || nestedReply.userName || 'User'));
+      }
+    });
+  };
+
+  comments.forEach(walkComment);
+
+  const streaks = Array.from(activityByAccount.entries()).map(([key, entry]) => {
+    const stats = calculateStreaksForDates([...entry.dates]);
+    return {
+      key,
+      displayName: entry.displayName,
+      userId: entry.userId,
+      currentStreak: stats.currentStreak,
+      bestStreak: stats.bestStreak,
+      lastActiveDate: stats.lastActiveDate,
+    } satisfies AccountStreakSummary;
+  }).sort((a, b) => b.currentStreak - a.currentStreak || b.bestStreak - a.bestStreak || a.displayName.localeCompare(b.displayName));
+
+  const streakLookup = new Map(streaks.map((streak) => [streak.key, streak]));
+
+  const assignStreak = (entry: { userId?: number; userName?: string; isAnonymous?: boolean; streak?: number }, fallbackName: string) => {
+    if (entry.isAnonymous) {
+      return;
+    }
+
+    const normalizedName = entry.userName?.trim() || fallbackName;
+    const userId = typeof entry.userId === 'number' && entry.userId > 0 ? entry.userId : undefined;
+    const key = userId ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+    const summary = streakLookup.get(key);
+    if (summary) {
+      entry.streak = summary.currentStreak;
+    }
+  };
+
+  const walkAndAssign = (comment: Comment) => {
+    assignStreak(comment, comment.userName || 'User');
+    comment.replies.forEach((reply) => {
+      assignStreak(reply, reply.authorName || reply.userName || 'User');
+      if (reply.replies && reply.replies.length > 0) {
+        reply.replies.forEach((nestedReply) => assignStreak(nestedReply, nestedReply.authorName || nestedReply.userName || 'User'));
+      }
+    });
+  };
+
+  comments.forEach(walkAndAssign);
+
+  return { comments, streaks };
 }
 
 function normalizeChatMessage(value: unknown): ChatMessage {
@@ -653,6 +792,8 @@ export async function createReply(
   parentReplyId?: number,
   authorName?: string,
   targetName?: string,
+  userId?: number,
+  userName?: string,
 ): Promise<CommentReply> {
   const client = getSupabaseClient();
   if (!client) {
@@ -674,6 +815,8 @@ export async function createReply(
     author,
     authorName,
     targetName: resolvedTargetName,
+    userId: typeof userId === 'number' && userId > 0 ? userId : undefined,
+    userName: userName?.trim() || authorName?.trim() || undefined,
     replies: [],
   };
 

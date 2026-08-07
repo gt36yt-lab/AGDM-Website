@@ -19,6 +19,9 @@ type CommentReply = {
   author: "ag" | "user";
   authorName?: string;
   targetName?: string;
+  userId?: number;
+  userName?: string;
+  streak?: number;
   replies?: CommentReply[];
 };
 
@@ -30,6 +33,7 @@ type Comment = {
   isAnonymous: boolean;
   createdAt: string;
   replies: CommentReply[];
+  streak?: number;
 };
 
 type UserAccount = {
@@ -44,6 +48,7 @@ type ChatMessageRow = {
   createdAt: string;
   message: string;
   targetName?: string;
+  streak?: number;
 };
 
 export default function AdminDashboard() {
@@ -61,6 +66,7 @@ export default function AdminDashboard() {
   const [chatAnonymous, setChatAnonymous] = useState(false);
   const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [streaks, setStreaks] = useState<Array<{ displayName: string; currentStreak: number; bestStreak: number; lastActiveDate: string }>>([]);
 
   const loadQuotes = useCallback(async () => {
     const res = await fetch("/api/quotes", { cache: "no-store" });
@@ -80,7 +86,9 @@ export default function AdminDashboard() {
       return;
     }
     const data = await res.json();
-    setComments(data.comments ?? []);
+    const nextComments = data.comments ?? [];
+    setComments(nextComments);
+    setStreaks(data.streaks ?? []);
   }, [router]);
 
   const loadUsers = useCallback(async () => {
@@ -240,6 +248,7 @@ export default function AdminDashboard() {
           createdAt: reply.createdAt,
           message: reply.message,
           targetName: reply.targetName,
+          streak: reply.streak,
         },
       ];
 
@@ -259,6 +268,7 @@ export default function AdminDashboard() {
           authorLabel: comment.isAnonymous ? "Anonymous" : comment.userName,
           createdAt: comment.createdAt,
           message: comment.message,
+          streak: comment.streak,
         },
       ];
 
@@ -405,7 +415,14 @@ export default function AdminDashboard() {
                   {chatMessages.map((item) => (
                     <li key={item.id} className="rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
                       <div className="flex items-center justify-between gap-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent-soft)]">{item.authorLabel}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent-soft)]">{item.authorLabel}</p>
+                          {typeof item.streak === "number" && item.streak > 0 && (
+                            <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                              🔥 {item.streak} day streak
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-[var(--text-muted)]">{new Date(item.createdAt).toLocaleString()}</p>
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-[var(--text)]">
@@ -435,6 +452,24 @@ export default function AdminDashboard() {
                 <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Account users</h2>
                 <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-[var(--accent-soft)]">{users.length}</span>
               </div>
+              {streaks.length > 0 && (
+                <div className="mb-6 rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
+                  <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Active streaks</p>
+                  <ul className="mt-3 space-y-2">
+                    {streaks.map((streak) => (
+                      <li key={streak.displayName} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--accent-soft)]">{streak.displayName}</p>
+                          <p className="text-[11px] text-[var(--text-muted)]">Best {streak.bestStreak} day streak</p>
+                        </div>
+                        <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
+                          🔥 {streak.currentStreak}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {users.length === 0 ? (
                 <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
               ) : (
