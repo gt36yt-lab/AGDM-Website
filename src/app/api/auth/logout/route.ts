@@ -1,12 +1,11 @@
 import { clearSessionCookie, clearUserSessionCookie } from "@/lib/auth";
 
 export async function POST() {
-  return Response.json(
-    { ok: true },
-    {
-      headers: {
-        "Set-Cookie": [clearUserSessionCookie(), clearSessionCookie()].join(", "),
-      },
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: "/account/login",
+      "Set-Cookie": [clearUserSessionCookie(), clearSessionCookie()].join(", "),
     },
-  );
+  });
 }
