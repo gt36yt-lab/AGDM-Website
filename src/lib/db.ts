@@ -176,7 +176,7 @@ function calculateStreaksForDates(dates: string[]): { currentStreak: number; bes
   };
 }
 
-export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comment[]; streaks: AccountStreakSummary[] } {
+export async function enrichCommentsWithStreaks(comments: Comment[]): Promise<{ comments: Comment[]; streaks: AccountStreakSummary[] }> {
   const activityByAccount = new Map<string, { displayName: string; userId?: number; dates: Set<string> }>();
   // store overrides as { value, dateKey } where dateKey is the day the override was set (in quote timezone)
   const manualStreakOverrides = new Map<string, { value: number; dateKey: string }>();
@@ -274,6 +274,31 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
       lastActiveDate: stats.lastActiveDate,
     } satisfies AccountStreakSummary;
   }).sort((a, b) => b.currentStreak - a.currentStreak || b.bestStreak - a.bestStreak || a.displayName.localeCompare(b.displayName));
+
+  // If Supabase is available, prefer stored values in `account_streaks`.
+  try {
+    const client = getSupabaseClient();
+    if (client && streaks.length > 0) {
+      const keys = streaks.map((s) => s.key);
+      const { data: stored, error: fetchErr } = await client.from('account_streaks').select('*').in('key', keys);
+      if (!fetchErr && Array.isArray(stored)) {
+        const storedMap = new Map(stored.map((r: unknown) => {
+          const row = r as Record<string, unknown>;
+          return [String(row.key ?? ''), row] as const;
+        }));
+        for (const s of streaks) {
+          const row = storedMap.get(s.key);
+          if (row) {
+            s.currentStreak = Number(row.current_streak ?? s.currentStreak ?? 0);
+            s.bestStreak = Number(row.best_streak ?? s.bestStreak ?? 0);
+            s.lastActiveDate = row.last_active_date ? String(row.last_active_date) : s.lastActiveDate;
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore persistence read errors and fall back to computed streaks
+  }
 
   const streakLookup = new Map(streaks.map((streak) => [streak.key, streak]));
 

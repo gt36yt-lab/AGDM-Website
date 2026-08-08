@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const comments = (await listAllComments()).filter(
       (comment) => formatDateKey(comment.createdAt, getQuoteTimezone()) === dateKey,
     );
-    const { comments: withStreaks, streaks } = enrichCommentsWithStreaks(comments);
+    const { comments: withStreaks, streaks } = await enrichCommentsWithStreaks(comments);
     return Response.json(
       { comments: withStreaks, streaks },
       {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
 
   const comments = await listCommentsForQuote(quoteId);
-  const { comments: withStreaks } = enrichCommentsWithStreaks(comments);
+  const { comments: withStreaks } = await enrichCommentsWithStreaks(comments);
   return Response.json(
     { comments: withStreaks },
     {
