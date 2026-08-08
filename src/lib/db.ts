@@ -178,7 +178,8 @@ function calculateStreaksForDates(dates: string[]): { currentStreak: number; bes
 
 export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comment[]; streaks: AccountStreakSummary[] } {
   const activityByAccount = new Map<string, { displayName: string; userId?: number; dates: Set<string> }>();
-  const manualStreakOverrides = new Map<string, number>();
+  // store overrides as { value, dateKey } where dateKey is the day the override was set (in quote timezone)
+  const manualStreakOverrides = new Map<string, { value: number; dateKey: string }>();
 
   const getActivityKey = (userId: number | undefined, userName: string | undefined) => {
     const normalizedName = userName?.trim() || 'User';
@@ -206,14 +207,15 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
   };
 
   const registerManualStreakOverride = (
-    entry: { userId?: number; userName?: string; streak?: number },
+    entry: { userId?: number; userName?: string; streak?: number; createdAt?: string },
     fallbackName: string,
   ) => {
     if (typeof entry.streak !== 'number' || entry.streak < 0) return;
     const userId = typeof entry.userId === 'number' && entry.userId > 0 ? entry.userId : undefined;
     const normalizedName = entry.userName?.trim() || fallbackName;
     const key = getActivityKey(userId, normalizedName);
-    manualStreakOverrides.set(key, entry.streak);
+    const dateKey = entry.createdAt ? toDateKey(entry.createdAt) : toDateKey(new Date());
+    manualStreakOverrides.set(key, { value: entry.streak, dateKey });
   };
 
   const walkComment = (comment: Comment) => {
@@ -235,12 +237,39 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
 
   const streaks = Array.from(activityByAccount.entries()).map(([key, entry]) => {
     const stats = calculateStreaksForDates([...entry.dates]);
-    const overrideCurrent = manualStreakOverrides.get(key);
+    const override = manualStreakOverrides.get(key);
+
+    let computedCurrent = stats.currentStreak;
+
+    if (override) {
+      // compute how many consecutive days the user has been active after the override date
+      const sortedDates = [...entry.dates].sort();
+      let consecutiveAfterOverride = 0;
+      try {
+        const cursorDate = new Date(override.dateKey + 'T12:00:00Z');
+        const next = new Date(cursorDate.getTime() + 86_400_000);
+        let check = toDateKey(next);
+        // count consecutive active days starting the day after override
+        while (sortedDates.includes(check)) {
+          consecutiveAfterOverride += 1;
+          next.setTime(next.getTime() + 86_400_000);
+          check = toDateKey(next);
+        }
+      } catch (e) {
+        // fallback: don't increment
+        consecutiveAfterOverride = 0;
+      }
+
+      const adjusted = override.value + consecutiveAfterOverride;
+      // prefer the larger of computed activity streak and adjusted override
+      computedCurrent = Math.max(computedCurrent, adjusted);
+    }
+
     return {
       key,
       displayName: entry.displayName,
       userId: entry.userId,
-      currentStreak: typeof overrideCurrent === 'number' ? overrideCurrent : stats.currentStreak,
+      currentStreak: computedCurrent,
       bestStreak: stats.bestStreak,
       lastActiveDate: stats.lastActiveDate,
     } satisfies AccountStreakSummary;
@@ -805,7 +834,8 @@ export async function setUserStreakOverride(userId: number | undefined, username
     return false;
   }
 
-  const { error } = await client.from('comments').update({ streak }).eq('id', comment.id);
+  // persist the override value on the chosen comment and its created_at date (we rely on created_at for override date)
+  const { error } = await client.from('comments').update({ streak, created_at: comment.createdAt }).eq('id', comment.id);
   if (error) {
     console.error('Supabase streak override update failed:', error);
     return false;
