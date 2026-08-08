@@ -16,6 +16,10 @@ const serif = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "AG Daily Motivation",
   description: "A daily dose of motivation from AG.",
+  icons: [
+    { rel: "icon", url: "/images/logo.jpg" },
+    { rel: "shortcut icon", url: "/images/logo.jpg" },
+  ],
 };
 
 export default function RootLayout({
