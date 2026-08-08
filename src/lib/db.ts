@@ -879,6 +879,33 @@ export async function listAllComments(): Promise<Comment[]> {
   return Array.isArray(data) ? data.map((entry) => normalizeComment(entry as Record<string, unknown>)) : [];
 }
 
+async function upsertAccountStreakOverride(client: ReturnType<typeof getSupabaseClient>, key: string, displayName: string, userId: number | undefined, streak: number): Promise<boolean> {
+  if (!client) return false;
+
+  const { data: existing, error: fetchError } = await client.from('account_streaks').select('best_streak').eq('key', key).limit(1).single();
+  let bestStreak = streak;
+  if (!fetchError && existing && typeof existing.best_streak === 'number') {
+    bestStreak = Math.max(streak, Number(existing.best_streak));
+  }
+
+  const { error: upsertError } = await client.from('account_streaks').upsert({
+    key,
+    user_id: userId ?? null,
+    display_name: displayName,
+    current_streak: streak,
+    best_streak: bestStreak,
+    last_active_date: new Date().toISOString().substring(0, 10),
+    updated_at: new Date().toISOString(),
+  });
+
+  if (upsertError) {
+    console.error('Supabase account_streaks upsert failed:', upsertError);
+    return false;
+  }
+
+  return true;
+}
+
 export async function setUserStreakOverride(userId: number | undefined, username: string, streak: number): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
@@ -898,10 +925,18 @@ export async function setUserStreakOverride(userId: number | undefined, username
     return false;
   }
 
+  const key = typeof userId === 'number' && userId > 0 ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+  const displayName = normalizedName || comment.userName || 'User';
+
   // persist the override value on the chosen comment and its created_at date (we rely on created_at for override date)
   const { error } = await client.from('comments').update({ streak, created_at: comment.createdAt }).eq('id', comment.id);
   if (error) {
     console.error('Supabase streak override update failed:', error);
+    return false;
+  }
+
+  const accountRowSaved = await upsertAccountStreakOverride(client, key, displayName, userId, streak);
+  if (!accountRowSaved) {
     return false;
   }
 
