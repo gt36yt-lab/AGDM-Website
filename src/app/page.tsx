@@ -11,7 +11,7 @@ import PrivateChat from "@/app/components/PrivateChat";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function HomePage() {
+export default async function HomePage(props: { searchParams?: Promise<{ date?: string | string[] }> }) {
   const cookie = (await headers()).get("cookie");
   const isAdmin = await isAdminSession(cookie);
   const session = await getUserSession(cookie);
@@ -21,10 +21,14 @@ export default async function HomePage() {
   }
 
   const tz = getQuoteTimezone();
-  const today = todayInTimezone(tz);
-  const exact = await getQuoteForDate(today);
-  const quote = exact ?? (await getLatestQuoteOnOrBefore(today));
-  const displayDate = formatDisplayDate(today, tz);
+  const searchParams = await props.searchParams;
+  const requestedDate = Array.isArray(searchParams?.date) ? searchParams?.date[0] : searchParams?.date;
+  const date = requestedDate && /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedDate)
+    ? requestedDate
+    : todayInTimezone(tz);
+  const exact = await getQuoteForDate(date);
+  const quote = exact ?? (await getLatestQuoteOnOrBefore(date));
+  const displayDate = formatDisplayDate(date, tz);
 
   return (
     <main className="min-h-dvh bg-[linear-gradient(180deg,#050621_0%,#101d4f_26%,#305d87_62%,#496995_100%)] px-4 text-[var(--text)]">

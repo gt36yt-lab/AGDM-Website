@@ -28,6 +28,7 @@ type CommentReply = {
 type Comment = {
   id: number;
   quoteId: number;
+  userId?: number;
   userName: string;
   message: string;
   isAnonymous: boolean;
@@ -65,8 +66,11 @@ export default function AdminDashboard() {
   const [chatMessage, setChatMessage] = useState("");
   const [chatAnonymous, setChatAnonymous] = useState(false);
   const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState(todayInTimezone(getQuoteTimezone()));
   const [loading, setLoading] = useState(true);
   const [streaks, setStreaks] = useState<Array<{ displayName: string; currentStreak: number; bestStreak: number; lastActiveDate: string }>>([]);
+  const [streakOverrides, setStreakOverrides] = useState<Record<number, string>>({});
+  const [streakLoadingId, setStreakLoadingId] = useState<number | null>(null);
 
   const loadQuotes = useCallback(async () => {
     const res = await fetch("/api/quotes", { cache: "no-store" });
@@ -80,16 +84,23 @@ export default function AdminDashboard() {
   }, [router]);
 
   const loadComments = useCallback(async () => {
-    const res = await fetch("/api/comments?mode=admin", { cache: "no-store" });
+    const res = await fetch(`/api/comments?mode=admin&date=${encodeURIComponent(selectedDate)}`, { cache: "no-store" });
     if (res.status === 401) {
       router.push("/admin/login");
       return;
     }
     const data = await res.json();
-    const nextComments = data.comments ?? [];
+    const nextComments = (data.comments ?? []) as Comment[];
     setComments(nextComments);
     setStreaks(data.streaks ?? []);
-  }, [router]);
+    const overrides: Record<number, string> = {};
+    nextComments.forEach((comment: Comment) => {
+      if (typeof comment.streak === "number") {
+        overrides[comment.id] = String(comment.streak);
+      }
+    });
+    setStreakOverrides(overrides);
+  }, [router, selectedDate]);
 
   const loadUsers = useCallback(async () => {
     const res = await fetch("/api/users", { cache: "no-store" });
@@ -223,6 +234,33 @@ export default function AdminDashboard() {
 
     setMessage(`Deleted account ${username}.`);
     await loadUsers();
+  }
+
+  async function onSaveStreakOverride(commentId: number, userName: string) {
+    const value = streakOverrides[commentId];
+    const streak = Number(value);
+    if (!Number.isInteger(streak) || streak < 0) {
+      console.warn("Invalid streak override", value);
+      return;
+    }
+
+    setStreakLoadingId(commentId);
+
+    const res = await fetch("/api/comments", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: userName, streak }),
+    });
+
+    setStreakLoadingId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.warn(data.error ?? "Could not save streak.");
+      return;
+    }
+
+    await loadComments();
   }
 
   function renderMentionText(text: string) {
@@ -377,7 +415,28 @@ export default function AdminDashboard() {
 
           <div className="space-y-8">
             <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-              <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Public chat</h2>
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Public chat</h2>
+                  <p className="text-xs text-[var(--text-muted)]">Showing comments for {selectedDate}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-3 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                  />
+                  <a
+                    href={`/?date=${encodeURIComponent(selectedDate)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm text-[var(--text)] transition hover:bg-white/10"
+                  >
+                    Open public view
+                  </a>
+                </div>
+              </div>
               <form onSubmit={onSubmitChat} className="space-y-4">
                 <textarea
                   value={chatMessage}
@@ -433,13 +492,40 @@ export default function AdminDashboard() {
                         )}
                       </p>
                       {item.id.startsWith("comment-") && (
-                        <button
-                          type="button"
-                          onClick={() => onDeleteComment(Number(item.id.replace("comment-", "")))}
-                          className="mt-3 text-xs uppercase tracking-[0.2em] text-red-300 hover:text-red-200"
-                        >
-                          Delete
-                        </button>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => onDeleteComment(Number(item.id.replace("comment-", "")))}
+                            className="text-xs uppercase tracking-[0.2em] text-red-300 hover:text-red-200"
+                          >
+                            Delete
+                          </button>
+                          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+                            <label className="text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]">
+                              Streak
+                              <input
+                                type="number"
+                                min={0}
+                                value={streakOverrides[Number(item.id.replace("comment-", ""))] ?? ""}
+                                onChange={(e) =>
+                                  setStreakOverrides((prev) => ({
+                                    ...prev,
+                                    [Number(item.id.replace("comment-", ""))]: e.target.value,
+                                  }))
+                                }
+                                className="ml-2 w-20 rounded-2xl border border-white/10 bg-[var(--bg-deep)]/80 px-2 py-1 text-xs text-[var(--text)] outline-none"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => onSaveStreakOverride(Number(item.id.replace("comment-", "")), item.authorLabel)}
+                              disabled={streakLoadingId === Number(item.id.replace("comment-", ""))}
+                              className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)] transition hover:bg-[var(--accent)]/20 disabled:opacity-50"
+                            >
+                              {streakLoadingId === Number(item.id.replace("comment-", "")) ? "Saving..." : "Save"}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </li>
                   ))}

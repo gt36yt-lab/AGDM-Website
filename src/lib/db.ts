@@ -1,5 +1,6 @@
 import { randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
 import { getSupabaseClient } from './supabase';
+import { getQuoteTimezone } from './dates';
 
 export interface Quote {
   id: number;
@@ -125,7 +126,12 @@ function normalizeComment(row: Record<string, unknown>): Comment {
 
 function toDateKey(value: string | Date): string {
   const date = typeof value === 'string' ? new Date(value) : value;
-  return date.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: getQuoteTimezone(),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 }
 
 function calculateStreaksForDates(dates: string[]): { currentStreak: number; bestStreak: number; lastActiveDate: string } {
@@ -172,6 +178,12 @@ function calculateStreaksForDates(dates: string[]): { currentStreak: number; bes
 
 export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comment[]; streaks: AccountStreakSummary[] } {
   const activityByAccount = new Map<string, { displayName: string; userId?: number; dates: Set<string> }>();
+  const manualStreakOverrides = new Map<string, number>();
+
+  const getActivityKey = (userId: number | undefined, userName: string | undefined) => {
+    const normalizedName = userName?.trim() || 'User';
+    return typeof userId === 'number' && userId > 0 ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+  };
 
   const registerActivity = (
     entry: { createdAt: string; userId?: number; userName?: string; isAnonymous?: boolean },
@@ -181,7 +193,10 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
 
     const normalizedName = entry.userName?.trim() || fallbackName;
     const userId = typeof entry.userId === 'number' && entry.userId > 0 ? entry.userId : undefined;
-    const key = userId ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+    const isAdminComment = !userId && normalizedName === 'AG';
+    if (isAdminComment) return;
+
+    const key = getActivityKey(userId, normalizedName);
     const existing = activityByAccount.get(key);
     const nextEntry = existing ?? { displayName: normalizedName, userId, dates: new Set<string>() };
     nextEntry.displayName = normalizedName;
@@ -190,12 +205,28 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
     activityByAccount.set(key, nextEntry);
   };
 
+  const registerManualStreakOverride = (
+    entry: { userId?: number; userName?: string; streak?: number },
+    fallbackName: string,
+  ) => {
+    if (typeof entry.streak !== 'number' || entry.streak < 0) return;
+    const userId = typeof entry.userId === 'number' && entry.userId > 0 ? entry.userId : undefined;
+    const normalizedName = entry.userName?.trim() || fallbackName;
+    const key = getActivityKey(userId, normalizedName);
+    manualStreakOverrides.set(key, entry.streak);
+  };
+
   const walkComment = (comment: Comment) => {
     registerActivity(comment, comment.userName || 'User');
+    registerManualStreakOverride(comment, comment.userName || 'User');
     comment.replies.forEach((reply) => {
       registerActivity(reply, reply.authorName || reply.userName || 'User');
+      registerManualStreakOverride(reply, reply.authorName || reply.userName || 'User');
       if (reply.replies && reply.replies.length > 0) {
-        reply.replies.forEach((nestedReply) => registerActivity(nestedReply, nestedReply.authorName || nestedReply.userName || 'User'));
+        reply.replies.forEach((nestedReply) => {
+          registerActivity(nestedReply, nestedReply.authorName || nestedReply.userName || 'User');
+          registerManualStreakOverride(nestedReply, nestedReply.authorName || nestedReply.userName || 'User');
+        });
       }
     });
   };
@@ -204,11 +235,12 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
 
   const streaks = Array.from(activityByAccount.entries()).map(([key, entry]) => {
     const stats = calculateStreaksForDates([...entry.dates]);
+    const overrideCurrent = manualStreakOverrides.get(key);
     return {
       key,
       displayName: entry.displayName,
       userId: entry.userId,
-      currentStreak: stats.currentStreak,
+      currentStreak: typeof overrideCurrent === 'number' ? overrideCurrent : stats.currentStreak,
       bestStreak: stats.bestStreak,
       lastActiveDate: stats.lastActiveDate,
     } satisfies AccountStreakSummary;
@@ -337,7 +369,6 @@ export async function createQuote(text: string, scheduledDate: string): Promise<
     throw new Error(error.message || 'Could not save quote');
   }
 
-  await client.from('comments').delete().neq('id', 0);
   return newQuote;
 }
 
@@ -753,6 +784,34 @@ export async function listAllComments(): Promise<Comment[]> {
   }
 
   return Array.isArray(data) ? data.map((entry) => normalizeComment(entry as Record<string, unknown>)) : [];
+}
+
+export async function setUserStreakOverride(userId: number | undefined, username: string, streak: number): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  if (streak < 0) return false;
+
+  const comments = await listAllComments();
+  const normalizedName = username.trim();
+  const comment = comments.find((entry) => {
+    if (typeof userId === 'number' && userId > 0 && entry.userId === userId) {
+      return true;
+    }
+    return entry.userName === normalizedName;
+  });
+
+  if (!comment) {
+    return false;
+  }
+
+  const { error } = await client.from('comments').update({ streak }).eq('id', comment.id);
+  if (error) {
+    console.error('Supabase streak override update failed:', error);
+    return false;
+  }
+
+  return true;
 }
 
 function addReplyToThread(replies: CommentReply[], targetReplyId: number, incomingReply: CommentReply): boolean {

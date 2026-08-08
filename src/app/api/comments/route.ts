@@ -1,9 +1,19 @@
 import type { NextRequest } from "next/server";
-import { createComment, enrichCommentsWithStreaks, listAllComments, listCommentsForQuote } from "@/lib/db";
+import { createComment, enrichCommentsWithStreaks, listAllComments, listCommentsForQuote, setUserStreakOverride } from "@/lib/db";
+import { getQuoteTimezone, todayInTimezone } from "@/lib/dates";
 import { getUserSession, requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function formatDateKey(value: string, timeZone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(value));
+}
 
 export async function GET(request: NextRequest) {
   const cookie = request.headers.get("cookie");
@@ -13,7 +23,11 @@ export async function GET(request: NextRequest) {
     const denied = await requireAdmin(cookie);
     if (denied) return denied;
 
-    const comments = await listAllComments();
+    const selectedDate = request.nextUrl.searchParams.get("date") ?? todayInTimezone(getQuoteTimezone());
+    const dateKey = String(selectedDate);
+    const comments = (await listAllComments()).filter(
+      (comment) => formatDateKey(comment.createdAt, getQuoteTimezone()) === dateKey,
+    );
     const { comments: withStreaks, streaks } = enrichCommentsWithStreaks(comments);
     return Response.json(
       { comments: withStreaks, streaks },
@@ -85,4 +99,35 @@ export async function POST(request: NextRequest) {
   );
 
   return Response.json({ comment }, { status: 201 });
+}
+
+export async function PATCH(request: NextRequest) {
+  const cookie = request.headers.get("cookie");
+  const denied = await requireAdmin(cookie);
+  if (denied) return denied;
+
+  let body: { userId?: number; username?: string; streak?: number };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const streak = Number(body.streak);
+  if (!Number.isInteger(streak) || streak < 0) {
+    return Response.json({ error: "Invalid streak" }, { status: 400 });
+  }
+
+  const username = String(body.username ?? "").trim();
+  const userId = Number.isInteger(Number(body.userId)) ? Number(body.userId) : undefined;
+  if (!userId && !username) {
+    return Response.json({ error: "userId or username is required" }, { status: 400 });
+  }
+
+  const changed = await setUserStreakOverride(userId, username, streak);
+  if (!changed) {
+    return Response.json({ error: "Could not save streak override" }, { status: 500 });
+  }
+
+  return Response.json({ ok: true });
 }
