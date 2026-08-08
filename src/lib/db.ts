@@ -906,7 +906,7 @@ async function upsertAccountStreakOverride(client: ReturnType<typeof getSupabase
   return true;
 }
 
-export async function setUserStreakOverride(userId: number | undefined, username: string, streak: number): Promise<boolean> {
+export async function setUserStreakOverride(commentId: number, userId: number | undefined, username: string, streak: number): Promise<boolean> {
   const client = getSupabaseClient();
   if (!client) return false;
 
@@ -914,18 +914,13 @@ export async function setUserStreakOverride(userId: number | undefined, username
 
   const comments = await listAllComments();
   const normalizedName = username.trim();
-  const comment = comments.find((entry) => {
-    if (typeof userId === 'number' && userId > 0 && entry.userId === userId) {
-      return true;
-    }
-    return entry.userName === normalizedName;
-  });
+  const comment = comments.find((entry) => entry.id === commentId);
 
   if (!comment) {
     return false;
   }
 
-  const key = typeof userId === 'number' && userId > 0 ? `user:${userId}` : `name:${normalizedName.toLowerCase()}`;
+  const key = typeof userId === 'number' && userId > 0 ? `user:${userId}` : `name:${comment.userName.toLowerCase()}`;
   const displayName = normalizedName || comment.userName || 'User';
 
   // persist the override value on the chosen comment and its created_at date (we rely on created_at for override date)

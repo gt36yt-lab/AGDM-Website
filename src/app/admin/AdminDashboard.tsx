@@ -236,30 +236,33 @@ export default function AdminDashboard() {
     await loadUsers();
   }
 
-  async function onSaveStreakOverride(commentId: number, userName: string) {
+  async function onSaveStreakOverride(commentId: number, userId: number | undefined, userName: string) {
     const value = streakOverrides[commentId];
     const streak = Number(value);
     if (!Number.isInteger(streak) || streak < 0) {
-      console.warn("Invalid streak override", value);
+      setError("Please enter a valid streak number.");
       return;
     }
 
     setStreakLoadingId(commentId);
+    setError("");
+    setMessage("");
 
     const res = await fetch("/api/comments", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: userName, streak }),
+      body: JSON.stringify({ commentId, userId, username: userName, streak }),
     });
 
     setStreakLoadingId(null);
 
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      console.warn(data.error ?? "Could not save streak.");
+      setError(data.error ?? "Could not save streak.");
       return;
     }
 
+    setMessage("Streak override saved.");
     await loadComments();
   }
 
@@ -518,7 +521,7 @@ export default function AdminDashboard() {
                             </label>
                             <button
                               type="button"
-                              onClick={() => onSaveStreakOverride(Number(item.id.replace("comment-", "")), item.authorLabel)}
+                              onClick={() => onSaveStreakOverride(Number(item.id.replace("comment-", "")), undefined, item.authorLabel)}
                               disabled={streakLoadingId === Number(item.id.replace("comment-", ""))}
                               className="rounded-full bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)] transition hover:bg-[var(--accent)]/20 disabled:opacity-50"
                             >

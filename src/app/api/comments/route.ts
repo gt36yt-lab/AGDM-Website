@@ -106,7 +106,7 @@ export async function PATCH(request: NextRequest) {
   const denied = await requireAdmin(cookie);
   if (denied) return denied;
 
-  let body: { userId?: number; username?: string; streak?: number };
+  let body: { commentId?: number; userId?: number; username?: string; streak?: number };
   try {
     body = await request.json();
   } catch {
@@ -118,13 +118,15 @@ export async function PATCH(request: NextRequest) {
     return Response.json({ error: "Invalid streak" }, { status: 400 });
   }
 
-  const username = String(body.username ?? "").trim();
-  const userId = Number.isInteger(Number(body.userId)) ? Number(body.userId) : undefined;
-  if (!userId && !username) {
-    return Response.json({ error: "userId or username is required" }, { status: 400 });
+  const commentId = Number.isInteger(Number(body.commentId)) ? Number(body.commentId) : undefined;
+  if (!commentId) {
+    return Response.json({ error: "commentId is required" }, { status: 400 });
   }
 
-  const changed = await setUserStreakOverride(userId, username, streak);
+  const username = String(body.username ?? "").trim();
+  const userId = Number.isInteger(Number(body.userId)) ? Number(body.userId) : undefined;
+
+  const changed = await setUserStreakOverride(commentId, userId, username, streak);
   if (!changed) {
     return Response.json({ error: "Could not save streak override" }, { status: 500 });
   }
