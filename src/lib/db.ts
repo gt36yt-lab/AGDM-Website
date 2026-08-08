@@ -255,10 +255,10 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
           next.setTime(next.getTime() + 86_400_000);
           check = toDateKey(next);
         }
-      } catch (e) {
-        // fallback: don't increment
-        consecutiveAfterOverride = 0;
-      }
+        } catch {
+          // fallback: don't increment
+          consecutiveAfterOverride = 0;
+        }
 
       const adjusted = override.value + consecutiveAfterOverride;
       // prefer the larger of computed activity streak and adjusted override
@@ -303,8 +303,47 @@ export function enrichCommentsWithStreaks(comments: Comment[]): { comments: Comm
 
   comments.forEach(walkAndAssign);
 
+  // Persist computed streaks to Supabase in the background (best-effort)
+  void (async () => {
+    try {
+      const client = getSupabaseClient();
+      if (!client) return;
+
+      const payload = streaks.map((s) => ({
+        key: s.key,
+        user_id: s.userId ?? null,
+        display_name: s.displayName,
+        current_streak: s.currentStreak,
+        best_streak: s.bestStreak,
+        last_active_date: s.lastActiveDate || null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await client.from('account_streaks').upsert(payload);
+      if (error) {
+        console.error('Supabase upsert account_streaks failed:', error);
+      }
+    } catch (err) {
+      console.error('Account streak persistence failed:', err);
+    }
+  })();
+
   return { comments, streaks };
 }
+
+// Persist computed streak summaries to Supabase (best-effort, non-blocking)
+;(function persistStreaks() {
+  try {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    // We will call this function only when the module is loaded and when enrichCommentsWithStreaks is called.
+    // To avoid making enrichCommentsWithStreaks async (and changing its callers), callers rely on the side-effect
+    // below which is invoked inside enrichCommentsWithStreaks after computing the `streaks` array.
+  } catch (err) {
+    console.error('Streak persistence initialization failed:', err);
+  }
+})();
 
 function normalizeChatMessage(value: unknown): ChatMessage {
   const message = (value as Record<string, unknown>) ?? {};
