@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState, useRef } from "react";
 import PrivateChat from "@/app/components/PrivateChat";
 import { getQuoteTimezone, todayInTimezone } from "@/lib/dates";
 
@@ -112,11 +112,70 @@ export default function AdminDashboard() {
     setUsers(data.users ?? []);
   }, [router]);
 
+  // private message tracking for admin notifications / badge
+  const [privateUnreadCount, setPrivateUnreadCount] = useState(0);
+  const seenPrivateIdsRef = useRef<Set<number>>(new Set());
+
+  const loadPrivateConversations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/messages', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const nextConversations = (data.conversations ?? []) as { id: number; userId: number; username: string; createdAt: string; messages: { id: number; sender: string; message: string }[] }[];
+
+      const allMessageIds = nextConversations.flatMap((c) => c.messages.map((m) => m.id));
+      if (seenPrivateIdsRef.current.size === 0 && allMessageIds.length > 0) {
+        allMessageIds.forEach((id) => seenPrivateIdsRef.current.add(id));
+        return;
+      }
+
+      const newInbound = nextConversations.flatMap((conversation) =>
+        conversation.messages.filter((m) => m.sender === 'user' && !seenPrivateIdsRef.current.has(m.id)),
+      );
+
+      newInbound.forEach((m) => seenPrivateIdsRef.current.add(m.id));
+
+      if (newInbound.length > 0) {
+        setPrivateUnreadCount((c) => c + newInbound.length);
+        const latest = newInbound[newInbound.length - 1];
+        const conv = nextConversations.find((c) => c.messages.some((mm) => mm.id === latest.id));
+        const username = conv?.username ?? 'A user';
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          new Notification('New private message', { body: `${username}: ${latest.message}` });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     loadQuotes();
     loadComments();
     loadUsers();
   }, [loadQuotes, loadComments, loadUsers]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadComments();
+    }, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [loadComments]);
+
+  useEffect(() => {
+    // poll private conversations for admin notifications
+    void loadPrivateConversations();
+    const interval = window.setInterval(() => void loadPrivateConversations(), 3000);
+    return () => window.clearInterval(interval);
+  }, [loadPrivateConversations]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if ('Notification' in window && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     const timezone = getQuoteTimezone();
@@ -348,6 +407,13 @@ export default function AdminDashboard() {
             >
               Public site
             </Link>
+            {privateUnreadCount > 0 && (
+              <div className="ml-2 flex items-center">
+                <div className="rounded-full bg-[var(--accent)]/10 px-3 py-2 text-sm font-semibold text-[var(--accent-soft)]">
+                  {privateUnreadCount}
+                </div>
+              </div>
+            )}
           </div>
         </header>
 
@@ -480,8 +546,9 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-2">
                           <p className="text-xs uppercase tracking-[0.2em] text-[var(--accent-soft)]">{item.authorLabel}</p>
                           {typeof item.streak === "number" && item.streak > 0 && (
-                            <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                              🔥 {item.streak} day streak
+                            <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/15 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-soft)]">
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-deep)]/60 text-[12px]">🔥</span>
+                              <span className="whitespace-nowrap">{item.streak} day streak</span>
                             </span>
                           )}
                         </div>
@@ -552,8 +619,9 @@ export default function AdminDashboard() {
                           <p className="text-[11px] text-[var(--text-muted)]">Best {streak.bestStreak} day streak</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                            🔥 {streak.currentStreak}
+                          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/15 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-soft)]">
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-deep)]/60 text-[12px]">🔥</span>
+                            <span className="whitespace-nowrap">{streak.currentStreak}</span>
                           </span>
                           <button
                             type="button"

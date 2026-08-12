@@ -343,8 +343,9 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
                     {item.authorLabel}
                   </p>
                   {typeof item.streak === "number" && item.streak > 0 && (
-                    <span className="rounded-full bg-[var(--accent)]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-soft)]">
-                      🔥 {item.streak}
+                    <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/15 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-soft)]">
+                      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-deep)]/60 text-[12px]">🔥</span>
+                      <span className="whitespace-nowrap">{item.streak}</span>
                     </span>
                   )}
                 </div>
