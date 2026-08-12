@@ -184,8 +184,8 @@ export default function AdminDashboard() {
 
     return () => {
       try {
-        supabase.removeChannel(commentsChannel);
-        supabase.removeChannel(pmChannel);
+        supabase?.removeChannel(commentsChannel);
+        supabase?.removeChannel(pmChannel);
       } catch {
         // ignore
       }
