@@ -68,7 +68,7 @@ export default function AdminDashboard() {
   const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayInTimezone(getQuoteTimezone()));
   const [loading, setLoading] = useState(true);
-  const [streaks, setStreaks] = useState<Array<{ displayName: string; currentStreak: number; bestStreak: number; lastActiveDate: string }>>([]);
+  const [streaks, setStreaks] = useState<Array<{ displayName: string; userId?: number; key?: string; currentStreak: number; bestStreak: number; lastActiveDate: string }>>([]);
   const [streakOverrides, setStreakOverrides] = useState<Record<number, string>>({});
   const [streakLoadingId, setStreakLoadingId] = useState<number | null>(null);
 

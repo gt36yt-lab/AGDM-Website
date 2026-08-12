@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     try {
       const ok = await setAccountStreak(s.userId, s.displayName, s.currentStreak);
       results.push({ key: s.key, ok });
-    } catch (err) {
+    } catch {
       results.push({ key: s.key, ok: false });
     }
   }
