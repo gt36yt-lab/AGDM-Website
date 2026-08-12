@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useState, useRef } from "react";
+import { supabase } from "@/lib/supabase";
 import PrivateChat from "@/app/components/PrivateChat";
 import { getQuoteTimezone, todayInTimezone } from "@/lib/dates";
 
@@ -162,6 +163,34 @@ export default function AdminDashboard() {
 
     return () => window.clearInterval(interval);
   }, [loadComments]);
+
+  // If Supabase realtime is available, subscribe to comments and private_messages
+  useEffect(() => {
+    if (!supabase) return;
+
+    const commentsChannel = supabase
+      .channel('realtime-comments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => {
+        void loadComments();
+      })
+      .subscribe();
+
+    const pmChannel = supabase
+      .channel('realtime-private-messages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'private_messages' }, () => {
+        void loadPrivateConversations();
+      })
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(commentsChannel);
+        supabase.removeChannel(pmChannel);
+      } catch {
+        // ignore
+      }
+    };
+  }, [loadComments, loadPrivateConversations]);
 
   useEffect(() => {
     // poll private conversations for admin notifications
