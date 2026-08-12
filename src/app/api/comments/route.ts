@@ -25,12 +25,19 @@ export async function GET(request: NextRequest) {
 
     const selectedDate = request.nextUrl.searchParams.get("date") ?? todayInTimezone(getQuoteTimezone());
     const dateKey = String(selectedDate);
-    const comments = (await listAllComments()).filter(
+
+    // Compute streaks from the full comment history so per-day admin views
+    // don't accidentally compute streaks from a partial dataset and reset
+    // persisted values. Then filter the enriched comments to the requested
+    // date for display.
+    const allComments = await listAllComments();
+    const { comments: allWithStreaks, streaks } = await enrichCommentsWithStreaks(allComments);
+    const commentsForDate = (allWithStreaks ?? []).filter(
       (comment) => formatDateKey(comment.createdAt, getQuoteTimezone()) === dateKey,
     );
-    const { comments: withStreaks, streaks } = await enrichCommentsWithStreaks(comments);
+
     return Response.json(
-      { comments: withStreaks, streaks },
+      { comments: commentsForDate, streaks },
       {
         headers: {
           "Cache-Control": "no-store",
