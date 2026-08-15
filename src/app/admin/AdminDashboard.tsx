@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useState, useRef } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import PrivateChat from "@/app/components/PrivateChat";
 import { getQuoteTimezone, todayInTimezone } from "@/lib/dates";
@@ -60,6 +60,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [text, setText] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
+  const [quotePoolText, setQuotePoolText] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [chatStatus, setChatStatus] = useState("");
@@ -114,6 +115,17 @@ export default function AdminDashboard() {
     setUsers(data.users ?? []);
   }, [router]);
 
+  const loadQuotePool = useCallback(async () => {
+    const res = await fetch("/api/quotes/pool", { cache: "no-store" });
+    if (res.status === 401) {
+      router.push("/admin/login");
+      return;
+    }
+    const data = await res.json();
+    const nextQuotes = Array.isArray(data.quotes) ? data.quotes : [];
+    setQuotePoolText(nextQuotes.join("\n"));
+  }, [router]);
+
   // private message tracking for admin notifications / badge
   const [privateUnreadCount, setPrivateUnreadCount] = useState(0);
   const seenPrivateIdsRef = useRef<Set<number>>(new Set());
@@ -155,7 +167,8 @@ export default function AdminDashboard() {
     loadQuotes();
     loadComments();
     loadUsers();
-  }, [loadQuotes, loadComments, loadUsers]);
+    void loadQuotePool();
+  }, [loadQuotes, loadComments, loadUsers, loadQuotePool]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -262,6 +275,83 @@ export default function AdminDashboard() {
       return;
     }
     await loadQuotes();
+  }
+
+  async function onSaveQuotePool(e: FormEvent) {
+    e.preventDefault();
+    const nextQuotes = quotePoolText
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (nextQuotes.length === 0) {
+      setError("Add at least one quote to the random pool.");
+      return;
+    }
+
+    const res = await fetch("/api/quotes/pool", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ quotes: nextQuotes }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error ?? "Could not save quote pool.");
+      return;
+    }
+
+    setMessage(`Saved ${Array.isArray(data.quotes) ? data.quotes.length : nextQuotes.length} quotes to the random pool.`);
+    setError("");
+    await loadQuotePool();
+  }
+
+  async function onQuoteFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileText = await file.text();
+    let parsedQuotes: string[] = [];
+
+    try {
+      const parsed = JSON.parse(fileText) as unknown;
+      if (Array.isArray(parsed)) {
+        parsedQuotes = parsed
+          .map((item) => typeof item === "string"
+            ? item.trim()
+            : item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string"
+              ? String((item as Record<string, unknown>).text).trim()
+              : "")
+          .filter(Boolean);
+      } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).quotes)) {
+        parsedQuotes = ((parsed as Record<string, unknown>).quotes as unknown[])
+          .map((item) => typeof item === "string"
+            ? item.trim()
+            : item && typeof item === "object" && typeof (item as Record<string, unknown>).text === "string"
+              ? String((item as Record<string, unknown>).text).trim()
+              : "")
+          .filter(Boolean);
+      }
+    } catch {
+      parsedQuotes = [];
+    }
+
+    const nextQuotes = parsedQuotes.length > 0
+      ? parsedQuotes
+      : fileText
+          .split(/\r?\n/)
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+
+    if (nextQuotes.length === 0) {
+      setError("This file did not contain any usable quotes.");
+      return;
+    }
+
+    setQuotePoolText(nextQuotes.join("\n"));
+    setMessage(`${nextQuotes.length} quotes loaded from ${file.name}.`);
+    setError("");
   }
 
   async function onLogout() {
@@ -528,11 +618,44 @@ export default function AdminDashboard() {
             </section>
 
             <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+              <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Random quote library</h2>
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">Add as many quotes as you want. The site picks one daily quote automatically from this pool.</p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--text)]">
+                  Import JSON/TXT
+                  <input type="file" accept=".json,.txt,.csv" onChange={onQuoteFileChange} className="hidden" />
+                </label>
+              </div>
+
+              <form onSubmit={onSaveQuotePool} className="space-y-4">
+                <textarea
+                  value={quotePoolText}
+                  onChange={(e) => setQuotePoolText(e.target.value)}
+                  rows={10}
+                  placeholder={'One quote per line\n\n"Believe you can and you are halfway there."\n"Small steps every day lead to big changes."'}
+                  className="w-full resize-y rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-4 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                />
+                <div className="flex items-center justify-between gap-4">
+                  <button type="submit" className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110">
+                    Save quote pool
+                  </button>
+                  {(error || message) && (
+                    <p className={`text-sm ${error ? "text-red-400" : "text-emerald-400"}`}>
+                      {error || message}
+                    </p>
+                  )}
+                </div>
+              </form>
+            </section>
+
+            <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
               <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Upcoming &amp; past</h2>
               {loading ? (
                 <p className="text-sm text-[var(--text-muted)]">Loading…</p>
               ) : quotes.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No quotes yet. Schedule your first one above.</p>
+                <p className="text-sm text-[var(--text-muted)]">No scheduled quotes yet. The random pool will still keep the home page active.</p>
               ) : (
                 <ul className="space-y-4">
                   {quotes.map((q) => (

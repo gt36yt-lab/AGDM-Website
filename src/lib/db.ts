@@ -1,6 +1,7 @@
 import { randomBytes, pbkdf2Sync, timingSafeEqual } from 'crypto';
 import { getSupabaseClient } from './supabase';
 import { getQuoteTimezone } from './dates';
+import { pickQuoteForDate, readQuotePool } from './quotePool';
 
 export interface Quote {
   id: number;
@@ -485,18 +486,43 @@ export async function deleteQuote(id: number): Promise<boolean> {
   return true;
 }
 
+export async function listQuotePool(): Promise<string[]> {
+  return readQuotePool();
+}
+
 export async function getQuoteForDate(dateStr: string): Promise<Quote | null> {
   const quotes = await listQuotes();
-  return quotes.find((quote) => quote.scheduledDate === dateStr) || null;
+  const scheduledQuote = quotes.find((quote) => quote.scheduledDate === dateStr);
+  if (scheduledQuote) return scheduledQuote;
+
+  const pool = await readQuotePool();
+  const dailyQuote = pickQuoteForDate(dateStr, pool);
+  if (!dailyQuote) return null;
+
+  return {
+    id: Number(dateStr.replace(/-/g, '')) || 1,
+    text: dailyQuote,
+    scheduledDate: dateStr,
+  };
 }
 
 export async function getLatestQuoteOnOrBefore(dateStr: string): Promise<Quote | null> {
   const quotes = await listQuotes();
   const pastQuotes = quotes.filter((quote) => quote.scheduledDate <= dateStr);
-  if (pastQuotes.length === 0) return null;
+  if (pastQuotes.length > 0) {
+    pastQuotes.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
+    return pastQuotes[0] ?? null;
+  }
 
-  pastQuotes.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
-  return pastQuotes[0] ?? null;
+  const pool = await readQuotePool();
+  const dailyQuote = pickQuoteForDate(dateStr, pool);
+  if (!dailyQuote) return null;
+
+  return {
+    id: Number(dateStr.replace(/-/g, '')) || 1,
+    text: dailyQuote,
+    scheduledDate: dateStr,
+  };
 }
 
 export async function createUser(username: string, password: string): Promise<User> {
