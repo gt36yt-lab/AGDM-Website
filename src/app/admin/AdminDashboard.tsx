@@ -61,8 +61,11 @@ export default function AdminDashboard() {
   const [text, setText] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [quotePoolText, setQuotePoolText] = useState("");
+  const [quotePoolCount, setQuotePoolCount] = useState(0);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [poolMessage, setPoolMessage] = useState("");
+  const [poolError, setPoolError] = useState("");
   const [chatStatus, setChatStatus] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
@@ -124,6 +127,7 @@ export default function AdminDashboard() {
     const data = await res.json();
     const nextQuotes = Array.isArray(data.quotes) ? data.quotes : [];
     setQuotePoolText(nextQuotes.join("\n"));
+    setQuotePoolCount(nextQuotes.length);
   }, [router]);
 
   // private message tracking for admin notifications / badge
@@ -285,7 +289,7 @@ export default function AdminDashboard() {
       .filter(Boolean);
 
     if (nextQuotes.length === 0) {
-      setError("Add at least one quote to the random pool.");
+      setPoolError("Add at least one quote to the random pool.");
       return;
     }
 
@@ -298,12 +302,14 @@ export default function AdminDashboard() {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(data.error ?? "Could not save quote pool.");
+      setPoolError(data.error ?? "Could not save quote pool.");
       return;
     }
 
-    setMessage(`Saved ${Array.isArray(data.quotes) ? data.quotes.length : nextQuotes.length} quotes to the random pool.`);
-    setError("");
+    const savedCount = Array.isArray(data.quotes) ? data.quotes.length : nextQuotes.length;
+    setQuotePoolCount(savedCount);
+    setPoolMessage(`Saved ${savedCount} quotes to the random pool.`);
+    setPoolError("");
     await loadQuotePool();
   }
 
@@ -345,13 +351,13 @@ export default function AdminDashboard() {
           .filter(Boolean);
 
     if (nextQuotes.length === 0) {
-      setError("This file did not contain any usable quotes.");
+      setPoolError("This file did not contain any usable quotes.");
       return;
     }
 
     setQuotePoolText(nextQuotes.join("\n"));
-    setMessage(`${nextQuotes.length} quotes loaded from ${file.name}.`);
-    setError("");
+    setPoolMessage(`${nextQuotes.length} quotes loaded from ${file.name}.`);
+    setPoolError("");
   }
 
   async function onLogout() {
@@ -620,7 +626,12 @@ export default function AdminDashboard() {
             <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Random quote library</h2>
+                  <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">
+                    Random quote library
+                    {quotePoolCount > 0 && (
+                      <span className="ml-3 text-xs text-[var(--accent-soft)]">({quotePoolCount} quotes)</span>
+                    )}
+                  </h2>
                   <p className="mt-2 text-xs text-[var(--text-muted)]">Add as many quotes as you want. The site picks one daily quote automatically from this pool.</p>
                 </div>
                 <label className="inline-flex cursor-pointer items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-xs uppercase tracking-[0.2em] text-[var(--text)]">
@@ -641,9 +652,9 @@ export default function AdminDashboard() {
                   <button type="submit" className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110">
                     Save quote pool
                   </button>
-                  {(error || message) && (
-                    <p className={`text-sm ${error ? "text-red-400" : "text-emerald-400"}`}>
-                      {error || message}
+                  {(poolError || poolMessage) && (
+                    <p className={`text-sm ${poolError ? "text-red-400" : "text-emerald-400"}`}>
+                      {poolError || poolMessage}
                     </p>
                   )}
                 </div>

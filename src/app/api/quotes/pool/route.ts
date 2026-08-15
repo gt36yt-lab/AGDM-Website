@@ -41,6 +41,13 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Add at least one quote." }, { status: 400 });
   }
 
-  const savedQuotes = await saveQuotePool(normalizedQuotes);
-  return Response.json({ quotes: savedQuotes }, { status: 200 });
+  try {
+    const savedQuotes = await saveQuotePool(normalizedQuotes);
+    return Response.json({ quotes: savedQuotes, count: savedQuotes.length }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error('Quote pool save error:', message);
+    return Response.json({ error: `Could not save quotes: ${message}` }, { status: 500 });
+  }
 }
+

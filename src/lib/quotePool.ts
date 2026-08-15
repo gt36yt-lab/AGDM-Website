@@ -77,10 +77,18 @@ export async function saveQuotePool(quotes: string[]): Promise<string[]> {
   const uniqueQuotes = [...new Set(quotes.map((quote) => quote.trim()).filter((quote) => quote.length > 0))];
   const filePath = poolPath();
 
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(uniqueQuotes, null, 2), "utf8");
+  if (uniqueQuotes.length === 0) {
+    throw new Error('No valid quotes to save');
+  }
 
-  return uniqueQuotes;
+  try {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify(uniqueQuotes, null, 2), "utf8");
+    return uniqueQuotes;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to save quotes: ${message}`);
+  }
 }
 
 export function pickQuoteForDate(dateKey: string, quotes: string[]): string {
