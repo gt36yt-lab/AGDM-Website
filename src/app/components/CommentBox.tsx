@@ -28,6 +28,7 @@ type Comment = {
 
 type CommentBoxProps = {
   quoteId: number;
+  date?: string;
   isSignedIn: boolean;
 };
 
@@ -59,7 +60,7 @@ function renderMentionText(text: string) {
   });
 }
 
-export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
+export default function CommentBox({ quoteId, date, isSignedIn }: CommentBoxProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [message, setMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -71,7 +72,12 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadComments = useCallback(async () => {
-    const res = await fetch(`/api/comments?quoteId=${quoteId}`, { cache: "no-store" });
+    const query = new URLSearchParams({ quoteId: String(quoteId) });
+    if (date) {
+      query.set("date", date);
+    }
+
+    const res = await fetch(`/api/comments?${query.toString()}`, { cache: "no-store" });
     if (!res.ok) return;
 
     const data = await res.json();
@@ -83,7 +89,7 @@ export default function CommentBox({ quoteId, isSignedIn }: CommentBoxProps) {
       }
       return nextComments;
     });
-  }, [quoteId]);
+  }, [date, quoteId]);
 
   useEffect(() => {
     void loadComments();

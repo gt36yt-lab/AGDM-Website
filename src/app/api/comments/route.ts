@@ -47,6 +47,8 @@ export async function GET(request: NextRequest) {
   }
 
   const quoteIdParam = request.nextUrl.searchParams.get("quoteId");
+  const selectedDate = request.nextUrl.searchParams.get("date");
+
   if (!quoteIdParam) {
     return Response.json({ error: "quoteId is required" }, { status: 400 });
   }
@@ -57,7 +59,11 @@ export async function GET(request: NextRequest) {
   }
 
   const comments = await listCommentsForQuote(quoteId);
-  const { comments: withStreaks } = await enrichCommentsWithStreaks(comments);
+  const filteredByDate = selectedDate
+    ? comments.filter((comment) => formatDateKey(comment.createdAt, getQuoteTimezone()) === String(selectedDate))
+    : comments;
+
+  const { comments: withStreaks } = await enrichCommentsWithStreaks(filteredByDate);
   return Response.json(
     { comments: withStreaks },
     {

@@ -76,7 +76,7 @@ export default async function HomePage(props: { searchParams?: Promise<{ date?: 
               </div>
               <div className="rounded-full bg-white/5 px-3 py-1 text-[var(--accent-soft)]">Live</div>
             </div>
-            <CommentBox quoteId={quote?.id ?? 1} isSignedIn={Boolean(session || isAdmin)} />
+            <CommentBox quoteId={quote?.id ?? 1} date={date} isSignedIn={Boolean(session || isAdmin)} />
           </section>
         </div>
 
