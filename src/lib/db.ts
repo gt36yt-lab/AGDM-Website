@@ -958,6 +958,21 @@ export async function setAccountStreak(userId: number | undefined, displayName: 
   return saved;
 }
 
+export async function deleteAccountStreak(userId: number | undefined, displayName: string): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  const key = typeof userId === 'number' && userId > 0 ? `user:${userId}` : `name:${(displayName || 'User').toLowerCase()}`;
+
+  const { error } = await client.from('account_streaks').delete().eq('key', key);
+  if (error) {
+    console.error('Supabase account_streaks delete failed:', error);
+    return false;
+  }
+
+  return true;
+}
+
 export async function listAccountStreaks(): Promise<Array<Record<string, unknown>>> {
   const client = getSupabaseClient();
   if (!client) return [];

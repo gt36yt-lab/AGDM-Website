@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { setAccountStreak, listAccountStreaks } from "@/lib/db";
+import { setAccountStreak, listAccountStreaks, deleteAccountStreak } from "@/lib/db";
 import { resetAndPersistStreaks } from "@/lib/streaks";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,28 @@ export async function PATCH(request: NextRequest) {
   const saved = await setAccountStreak(userId, displayName, streak);
   if (!saved) {
     return Response.json({ error: 'Could not save account streak' }, { status: 500 });
+  }
+
+  return Response.json({ ok: true });
+}
+
+export async function DELETE(request: NextRequest) {
+  const cookie = request.headers.get('cookie');
+  const denied = await requireAdmin(cookie);
+  if (denied) return denied;
+
+  const userIdParam = request.nextUrl.searchParams.get('userId');
+  const displayNameParam = request.nextUrl.searchParams.get('displayName');
+  const userId = userIdParam ? Number(userIdParam) : undefined;
+  const displayName = displayNameParam ? String(displayNameParam).trim() : 'User';
+
+  if (!displayName && !Number.isInteger(userId)) {
+    return Response.json({ error: 'Missing streak target' }, { status: 400 });
+  }
+
+  const deleted = await deleteAccountStreak(Number.isInteger(userId) ? userId : undefined, displayName);
+  if (!deleted) {
+    return Response.json({ error: 'Could not delete account streak' }, { status: 500 });
   }
 
   return Response.json({ ok: true });

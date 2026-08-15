@@ -69,6 +69,7 @@ export default function AdminDashboard() {
   const [activeQuoteId, setActiveQuoteId] = useState<number | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayInTimezone(getQuoteTimezone()));
   const [loading, setLoading] = useState(true);
+  const [adminView, setAdminView] = useState<"comments" | "quotes" | "streaks">("comments");
   const [streaks, setStreaks] = useState<Array<{ displayName: string; userId?: number; key?: string; currentStreak: number; bestStreak: number; lastActiveDate: string }>>([]);
   const [streakOverrides, setStreakOverrides] = useState<Record<number, string>>({});
   const [streakLoadingId, setStreakLoadingId] = useState<number | null>(null);
@@ -354,6 +355,26 @@ export default function AdminDashboard() {
     await loadComments();
   }
 
+  async function onDeleteStreak(userId: number | undefined, displayName: string) {
+    if (!confirm(`Delete streak for ${displayName}?`)) return;
+
+    const params = new URLSearchParams();
+    if (typeof userId === 'number' && Number.isInteger(userId)) {
+      params.set('userId', String(userId));
+    }
+    params.set('displayName', displayName);
+
+    const res = await fetch(`/api/admin/streaks?${params.toString()}`, { method: 'DELETE', cache: 'no-store' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? 'Could not delete streak.');
+      return;
+    }
+
+    setMessage(`Deleted streak for ${displayName}.`);
+    await loadComments();
+  }
+
   function renderMentionText(text: string) {
     return text.split(/(@[A-Za-z0-9._-]+)/g).map((part, index) => {
       if (!part.startsWith("@")) {
@@ -446,73 +467,98 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-          <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">New quote</h2>
-          <form className="grid gap-5 sm:grid-cols-[1fr_1.4fr]" onSubmit={onAdd}>
-            <label className="text-sm text-[var(--text-muted)]">
-              Goes live on
-              <input
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="mt-3 w-full rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-4 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                required
-              />
-            </label>
-            <label className="text-sm text-[var(--text-muted)]">
-              Quote
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={4}
-                placeholder="Write something that will life someone today"
-                className="mt-3 w-full rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-4 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                required
-              />
-            </label>
-            <div className="flex items-end justify-end">
-              <button type="submit" className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110">
-                Schedule
-              </button>
-            </div>
-          </form>
-          {(error || message) && (
-            <p className={`mt-4 text-sm ${error ? "text-red-400" : "text-emerald-400"}`}>
-              {error || message}
-            </p>
-          )}
-        </section>
+        <nav className="flex flex-wrap items-center gap-3 rounded-[2rem] border border-white/10 bg-white/5 p-3 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+          {[
+            { id: 'comments', label: 'Comments & Messages' },
+            { id: 'quotes', label: 'Quotes' },
+            { id: 'streaks', label: 'Streaks & Users' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setAdminView(tab.id as typeof adminView)}
+              className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
+                adminView === tab.id
+                  ? 'bg-[var(--accent)] text-[var(--bg-deep)]'
+                  : 'border border-white/10 bg-white/5 text-[var(--text)] hover:bg-white/10'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
 
-        <section className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-            <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Upcoming &amp; past</h2>
-            {loading ? (
-              <p className="text-sm text-[var(--text-muted)]">Loading…</p>
-            ) : quotes.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)]">No quotes yet. Schedule your first one above.</p>
-            ) : (
-              <ul className="space-y-4">
-                {quotes.map((q) => (
-                  <li key={q.id} className="rounded-[1.75rem] border border-white/10 bg-[var(--bg-deep)]/80 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <p className="text-sm uppercase tracking-[0.2em] text-[var(--accent-soft)]">{q.scheduledDate}</p>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(q.id)}
-                        className="text-xs uppercase tracking-[0.2em] text-red-300 hover:text-red-200"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <p className="mt-4 text-base leading-relaxed text-[var(--text)]">“{q.text}”</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        {adminView === 'quotes' && (
+          <>
+            <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+              <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">New quote</h2>
+              <form className="grid gap-5 sm:grid-cols-[1fr_1.4fr]" onSubmit={onAdd}>
+                <label className="text-sm text-[var(--text-muted)]">
+                  Goes live on
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    className="mt-3 w-full rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-4 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                    required
+                  />
+                </label>
+                <label className="text-sm text-[var(--text-muted)]">
+                  Quote
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    rows={4}
+                    placeholder="Write something that will life someone today"
+                    className="mt-3 w-full rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 px-4 py-4 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                    required
+                  />
+                </label>
+                <div className="flex items-end justify-end">
+                  <button type="submit" className="rounded-full bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--bg-deep)] transition hover:brightness-110">
+                    Schedule
+                  </button>
+                </div>
+              </form>
+              {(error || message) && (
+                <p className={`mt-4 text-sm ${error ? "text-red-400" : "text-emerald-400"}`}>
+                  {error || message}
+                </p>
+              )}
+            </section>
 
-          <div className="space-y-8">
-            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+            <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+              <h2 className="mb-6 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Upcoming &amp; past</h2>
+              {loading ? (
+                <p className="text-sm text-[var(--text-muted)]">Loading…</p>
+              ) : quotes.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No quotes yet. Schedule your first one above.</p>
+              ) : (
+                <ul className="space-y-4">
+                  {quotes.map((q) => (
+                    <li key={q.id} className="rounded-[1.75rem] border border-white/10 bg-[var(--bg-deep)]/80 p-5">
+                      <div className="flex items-center justify-between gap-4">
+                        <p className="text-sm uppercase tracking-[0.2em] text-[var(--accent-soft)]">{q.scheduledDate}</p>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(q.id)}
+                          className="text-xs uppercase tracking-[0.2em] text-red-300 hover:text-red-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      <p className="mt-4 text-base leading-relaxed text-[var(--text)]">“{q.text}”</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+
+        {adminView === 'comments' && (
+          <>
+            <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Public chat</h2>
@@ -630,78 +676,68 @@ export default function AdminDashboard() {
                   ))}
                 </ul>
               )}
+            </section>
+
+            <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+              <PrivateChat isAdmin={true} />
+            </section>
+          </>
+        )}
+
+        {adminView === 'streaks' && (
+          <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Account users</h2>
+              <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-[var(--accent-soft)]">{users.length}</span>
             </div>
-
-            <div className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-              <div className="mb-6 flex items-center justify-between gap-4">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--text-muted)]">Account users</h2>
-                <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-[var(--accent-soft)]">{users.length}</span>
-              </div>
-              {streaks.length > 0 && (
-                <div className="mb-6 rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
-                  <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Active streaks</p>
-                  <ul className="mt-3 space-y-2">
-                    {streaks.map((streak) => (
-                      <li key={streak.displayName} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--accent-soft)]">{streak.displayName}</p>
-                          <p className="text-[11px] text-[var(--text-muted)]">Best {streak.bestStreak} day streak</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/15 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-soft)]">
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-deep)]/60 text-[12px]">🔥</span>
-                            <span className="whitespace-nowrap">{streak.currentStreak}</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const value = prompt(`Set streak for ${streak.displayName}`, String(streak.currentStreak));
-                              if (value === null) return;
-                              const num = Number(value);
-                              if (!Number.isInteger(num) || num < 0) {
-                                alert('Please enter a valid non-negative integer');
-                                return;
-                              }
-
-                              const res = await fetch('/api/admin/streaks', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId: streak.userId, displayName: streak.displayName, streak: num }),
-                              });
-
-                              if (!res.ok) {
-                                const data = await res.json().catch(() => ({}));
-                                alert(data.error ?? 'Could not save streak');
-                                return;
-                              }
-
-                              await loadComments();
-                            }}
-                            className="text-xs uppercase tracking-[0.12em] text-[var(--accent-soft)] hover:underline"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {users.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
-              ) : (
-                <ul className="space-y-4">
-                  {users.map((user) => (
-                    <li key={user.id} className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--accent-soft)]">{user.username}</p>
-                          <p className="text-xs text-[var(--text-muted)]">Joined {new Date(user.createdAt).toLocaleString()}</p>
-                        </div>
+            {streaks.length > 0 && (
+              <div className="mb-6 rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
+                <p className="text-xs uppercase tracking-[0.24em] text-[var(--text-muted)]">Active streaks</p>
+                <ul className="mt-3 space-y-2">
+                  {streaks.map((streak) => (
+                    <li key={streak.displayName} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--accent-soft)]">{streak.displayName}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">Best {streak.bestStreak} day streak</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent)]/15 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-soft)]">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--bg-deep)]/60 text-[12px]">🔥</span>
+                          <span className="whitespace-nowrap">{streak.currentStreak}</span>
+                        </span>
                         <button
                           type="button"
-                          onClick={() => onDeleteUser(user.id, user.username)}
-                          className="rounded-full border border-red-400/30 px-4 py-2 text-xs uppercase tracking-[0.2em] text-red-400 hover:bg-red-400/10"
+                          onClick={async () => {
+                            const value = prompt(`Set streak for ${streak.displayName}`, String(streak.currentStreak));
+                            if (value === null) return;
+                            const num = Number(value);
+                            if (!Number.isInteger(num) || num < 0) {
+                              alert('Please enter a valid non-negative integer');
+                              return;
+                            }
+
+                            const res = await fetch('/api/admin/streaks', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ userId: streak.userId, displayName: streak.displayName, streak: num }),
+                            });
+
+                            if (!res.ok) {
+                              const data = await res.json().catch(() => ({}));
+                              alert(data.error ?? 'Could not save streak');
+                              return;
+                            }
+
+                            await loadComments();
+                          }}
+                          className="text-xs uppercase tracking-[0.12em] text-[var(--accent-soft)] hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteStreak(streak.userId, streak.displayName)}
+                          className="text-xs uppercase tracking-[0.12em] text-red-300 hover:underline"
                         >
                           Delete
                         </button>
@@ -709,14 +745,33 @@ export default function AdminDashboard() {
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-          <PrivateChat isAdmin={true} />
-        </section>
+              </div>
+            )}
+            {users.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">No user accounts yet.</p>
+            ) : (
+              <ul className="space-y-4">
+                {users.map((user) => (
+                  <li key={user.id} className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-[var(--bg-deep)]/80 p-4">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[var(--accent-soft)]">{user.username}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Joined {new Date(user.createdAt).toLocaleString()}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteUser(user.id, user.username)}
+                        className="rounded-full border border-red-400/30 px-4 py-2 text-xs uppercase tracking-[0.2em] text-red-400 hover:bg-red-400/10"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
