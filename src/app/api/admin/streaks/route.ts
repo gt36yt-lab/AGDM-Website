@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { setAccountStreak, listAccountStreaks, listAllComments, enrichCommentsWithStreaks } from "@/lib/db";
+import { setAccountStreak, listAccountStreaks } from "@/lib/db";
+import { resetAndPersistStreaks } from "@/lib/streaks";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,20 +49,6 @@ export async function POST(request: NextRequest) {
   const denied = await requireAdmin(cookie);
   if (denied) return denied;
 
-  // recompute from full history
-  const comments = await listAllComments();
-  const { streaks } = await enrichCommentsWithStreaks(comments);
-
-  // persist each account row using existing helper
-  const results: Array<{ key: string; ok: boolean }> = [];
-  for (const s of streaks) {
-    try {
-      const ok = await setAccountStreak(s.userId, s.displayName, s.currentStreak);
-      results.push({ key: s.key, ok });
-    } catch {
-      results.push({ key: s.key, ok: false });
-    }
-  }
-
-  return Response.json({ ok: true, results }, { headers: { 'Cache-Control': 'no-store' } });
+  const result = await resetAndPersistStreaks();
+  return Response.json({ ok: result.success, errors: result.errors, streaksUpdated: result.streaksUpdated }, { headers: { 'Cache-Control': 'no-store' } });
 }
