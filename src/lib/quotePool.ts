@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { getSupabaseClient } from './supabase';
 
 const DEFAULT_QUOTE_POOL = [
   "Believe you can and you are halfway there.",
@@ -30,60 +29,58 @@ function normalizeQuoteText(value: unknown): string | null {
   return null;
 }
 
-function poolPath() {
-  return path.join(process.cwd(), "data", "quotes.json");
-}
-
 export async function readQuotePool(): Promise<string[]> {
-  const filePath = poolPath();
-
-  try {
-    const raw = await readFile(filePath, "utf8");
-    if (!raw.trim()) {
-      await writeFile(filePath, JSON.stringify(DEFAULT_QUOTE_POOL, null, 2), "utf8");
-      return [...DEFAULT_QUOTE_POOL];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    const entries = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).quotes)
-        ? (parsed as Record<string, unknown>).quotes as unknown[]
-        : [];
-
-    const normalized = entries
-      .map((entry) => normalizeQuoteText(entry))
-      .filter((entry): entry is string => Boolean(entry));
-
-    if (normalized.length > 0) {
-      return [...new Set(normalized)];
-    }
-
-    await writeFile(filePath, JSON.stringify(DEFAULT_QUOTE_POOL, null, 2), "utf8");
-    return [...DEFAULT_QUOTE_POOL];
-  } catch {
-    try {
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, JSON.stringify(DEFAULT_QUOTE_POOL, null, 2), "utf8");
-    } catch {
-      // Ignore FS issues during app startup; fall back to in-memory quotes.
-    }
-
+  const client = getSupabaseClient();
+  if (!client) {
     return [...DEFAULT_QUOTE_POOL];
   }
+
+  try {
+    const { data, error } = await client
+      .from('quote_pool')
+      .select('quotes')
+      .eq('id', 1)
+      .single();
+
+    if (!error && data && Array.isArray(data.quotes)) {
+      const normalized = data.quotes
+        .map((entry) => normalizeQuoteText(entry))
+        .filter((entry): entry is string => Boolean(entry));
+
+      if (normalized.length > 0) {
+        return [...new Set(normalized)];
+      }
+    }
+  } catch {
+    // Ignore errors; fall back to defaults
+  }
+
+  return [...DEFAULT_QUOTE_POOL];
 }
 
 export async function saveQuotePool(quotes: string[]): Promise<string[]> {
+  const client = getSupabaseClient();
+  if (!client) {
+    throw new Error('Supabase is not configured');
+  }
+
   const uniqueQuotes = [...new Set(quotes.map((quote) => quote.trim()).filter((quote) => quote.length > 0))];
-  const filePath = poolPath();
 
   if (uniqueQuotes.length === 0) {
     throw new Error('No valid quotes to save');
   }
 
   try {
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify(uniqueQuotes, null, 2), "utf8");
+    const { error: upsertError } = await client
+      .from('quote_pool')
+      .upsert({ id: 1, quotes: uniqueQuotes, updated_at: new Date().toISOString() })
+      .select()
+      .single();
+
+    if (upsertError) {
+      throw new Error(upsertError.message || 'Failed to save quotes to database');
+    }
+
     return uniqueQuotes;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
